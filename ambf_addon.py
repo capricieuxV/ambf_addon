@@ -6,7 +6,7 @@ bl_info = {
     "name": "Asynchronous Multi-Body Framework (AMBF) Config Creator",
     "author": "Adnan Munawar",
     "version": (0, 1),
-    "blender": (3, 0, 0),
+    "blender": (4, 0, 0),
     "location": "View3D > Add > Mesh > AMBF",
     "description": "Helps Generate AMBF Config File and Saves both High and Low Resolution(Collision) Meshes",
     "warning": "",
@@ -3118,6 +3118,7 @@ class AMBF_PT_main_panel(Panel):
         for o in bpy.data.objects:
             if o.ambf_object_type in ['RIGID_BODY', 'CONSTRAINT', 'COLLISION_SHAPE']:
                 if context.scene.objects.get(o.name) is None:
+                # if bpy.data.objects[o.name] is None:
                     bpy.data.objects.remove(o)
 
         layout = self.layout
