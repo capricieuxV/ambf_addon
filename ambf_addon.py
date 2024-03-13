@@ -1163,6 +1163,9 @@ class AMBF_OT_generate_ambf_file(Operator):
     # This method add the joint prefix if set to all the joints in AMBF
     def add_joint_prefix_str(self, urdf_joint_str):
         return self.joint_name_prefix + urdf_joint_str
+    
+    def generate_body_data_from_ambf_soft_body(self, adf_data, obj_handle):
+        return
 
     def generate_body_data_from_ambf_rigid_body(self, adf_data, obj_handle):
 
@@ -1707,6 +1710,8 @@ class AMBF_OT_generate_ambf_file(Operator):
 
     def generate_adf(self):
         num_objs = len(bpy.data.objects)
+        print('Number of objects in the scene: ', num_objs)
+        print('Generating ADF {bpy.path.filepath}')
         save_to = bpy.path.abspath(self._context.scene.ambf_adf_path)
         filename = os.path.basename(save_to)
         save_dir = os.path.dirname(save_to)
