@@ -88,6 +88,80 @@ class JointTemplate:
         self._adf_data['controller'] = cont_dict
         self._adf_data['controller output type'] = 'VELOCITY'
 
+class CameraTemplate:
+    def __init__(self):
+        self._adf_data = OrderedDict()
+        self._adf_data['name'] = ''
+        self._adf_data['parent'] = ''
+        self._adf_data['location'] = get_pose_ordered_dict()
+        self._adf_data['look at'] = get_pose_ordered_dict()
+        self._adf_data['up'] = get_pose_ordered_dict()
+        self._adf_data['clipping plane'] = {'near': 0.0, 'far': 0.0}
+        self._adf_data['field view angle'] = 0.0
+        # self._adf_data['orthographic view width'] = 0.0
+        # self._adf_data['stereo'] = {'mode': "", 'eye separation': 0.0, 'focal length': 0.0}
+        # self._adf_data['controlling devices'] = []
+        # self._adf_data['monitor'] = 0
+        self._adf_data['visible'] = False
+        self._adf_data['publish image'] = False
+        self._adf_data['publish image interval'] = 0
+        self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
+        self._adf_data['publish depth'] = False
+        self._adf_data['publish depth interval'] = 0
+        self._adf_data['publish depth resolution'] = {'width': 0.0, 'height': 0.0}
+        self._adf_data['publish depth noise'] = {'enable': False, 'mean': 0.0, 'std_dev': 0.0, 'bias': 0.0}
+        # self._adf_data['preprocessing shaders'] = []
+        # self._adf_data['depth compute shaders'] = []
+        # self._adf_data['multipass'] = False
+        # self._adf_data['mouse control multipliers'] = {'pan': 0.0, 'rotate': 0.0, 'scroll': 0.0, 'arcball': 0.0}
+
+class LightTemplate:
+    def __init__(self):
+        self._adf_data = OrderedDict()
+        self._adf_data['name'] = ''
+        self._adf_data['parent'] = ''
+        self._adf_data['location'] = get_pose_ordered_dict()
+        self._adf_data['color'] = get_xyz_ordered_dict()
+        self._adf_data['intensity'] = 0.0
+        self._adf_data['type'] = 'POINT'
+        self._adf_data['spot'] = {'angle': 0.0, 'blend': 0.0}
+        self._adf_data['direction'] = get_xyz_ordered_dict()
+        self._adf_data['distance'] = 0.0
+        self._adf_data['decay'] = 0.0
+        self._adf_data['shadow'] = {'enable': False, 'bias': 0.0, 'radius': 0.0, 'map size': 0.0, 'map resolution': 0.0}
+        self._adf_data['visible'] = False
+        self._adf_data['publish image'] = False
+        self._adf_data['publish image interval'] = 0
+        self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
+        self._adf_data['publish depth'] = False
+        self._adf_data['publish depth interval'] = 0
+        self._adf_data['publish depth resolution'] = {'width': 0.0, 'height': 0.0}
+        self._adf_data['publish depth noise'] = {'enable': False, 'mean': 0.0, 'std_dev': 0.0, 'bias': 0.0}
+
+class SensorTemplate:
+    def __init__(self):
+        self.adf_data = OrderedDict()
+        self.adf_data['name'] = ''
+        self.adf_data['namespace'] = ''
+        self.adf_data['type'] = ''
+        self.adf_data['parent'] = ''
+        self.adf_data['location'] = get_pose_ordered_dict
+        self.adf_data['location']['position'] = get_xyz_ordered_dict()
+        self.adf_data['location']['orientation'] = get_rpy_ordered_dict()
+        self.adf_data['publish frequency'] = 0.0
+
+class ActuatorTemplate:
+    def __init__(self):
+        self.adf_data = OrderedDict()
+        self.adf_data['name'] = ''
+        self.adf_data['namespace'] = ''
+        self.adf_data['type'] = ''
+        self.adf_data['parent'] = ''
+        self.adf_data['location'] = get_pose_ordered_dict
+        self.adf_data['location']['position'] = get_xyz_ordered_dict()
+        self.adf_data['location']['orientation'] = get_rpy_ordered_dict()
+        self.adf_data['publish frequency'] = 0.0
+        
 
 # Global Variables
 class CommonConfig:
@@ -249,6 +323,7 @@ def set_global_namespace(context, namespace):
 
 
 def get_body_namespace(fullname):
+    print("Handling get_body_namespace...")
     last_occurance = fullname.rfind('/')
     _body_namespace = ''
     if last_occurance >= 0:
@@ -256,6 +331,14 @@ def get_body_namespace(fullname):
         _body_namespace = fullname[0:last_occurance+1]
     return _body_namespace
 
+def get_namespace(fullname):
+    print("Handling get_namespace...")
+    last_occurance = fullname.rfind('/')
+    _namespace = ''
+    if last_occurance >= 0:
+        # This means that the name contains a namespace
+        _namespace = fullname[0:last_occurance+1]
+    return _namespace
 
 def remove_namespace_prefix(full_name):
     last_occurance = full_name.rfind('/')
@@ -274,6 +357,7 @@ def replace_dot_from_object_names(char_subs ='_'):
 
 
 def compare_body_namespace_with_global(fullname):
+    print("Handling compare_body_namespace_with_global...")
     last_occurance = fullname.rfind('/')
     _is_namespace_same = False
     _body_namespace = ''
@@ -294,8 +378,34 @@ def compare_body_namespace_with_global(fullname):
         # The body's name does not contain and namespace
         _is_namespace_same = False
 
-    # print("FULLNAME: %s, BODY: %s, NAMESPACE: %s NAMESPACE_MATCHED: %d" %
-    # (fullname, _name, _body_namespace, _is_namespace_same))
+    print("FULLNAME: %s, BODY: %s, NAMESPACE: %s NAMESPACE_MATCHED: %d" %
+    (fullname, _name, _body_namespace, _is_namespace_same))
+    return _is_namespace_same
+
+def compare_namespace_with_global(fullname):
+    print("Handling compare_namespace_with_global...")
+    last_occurance = fullname.rfind('/')
+    _is_namespace_same = False
+    _namespace = ''
+    _name = ''
+    if last_occurance >= 0:
+        # This means that the name contains a namespace
+        _namespace = fullname[0:last_occurance+1]
+        _name = fullname[last_occurance+1:]
+
+        if CommonConfig.namespace == _namespace:
+            # The CommonConfig namespace is the same as the object namespace
+            _is_namespace_same = True
+        else:
+            # The CommonConfig namespace is different form object namespace
+            _is_namespace_same = False
+
+    else:
+        # The object's name does not contain and namespace
+        _is_namespace_same = False
+
+    print("FULLNAME: %s, OBJ: %s, NAMESPACE: %s NAMESPACE_MATCHED: %d" %
+    (fullname, _name, _namespace, _is_namespace_same))
     return _is_namespace_same
 
 
@@ -1146,8 +1256,10 @@ class AMBF_OT_generate_ambf_file(Operator):
     def __init__(self):
         self._body_names_list = []
         self._joint_names_list = []
+        self._camera_names_list = []
         self.body_name_prefix = 'BODY '
         self.joint_name_prefix = 'JOINT '
+        self.camera_name_prefix = 'CAMERA '
         self._adf = None
         self._context = None
 
@@ -1164,8 +1276,12 @@ class AMBF_OT_generate_ambf_file(Operator):
     def add_joint_prefix_str(self, urdf_joint_str):
         return self.joint_name_prefix + urdf_joint_str
     
-    def generate_body_data_from_ambf_soft_body(self, adf_data, obj_handle):
-        return
+    # This method add the camera prefix if set to all the cameras in AMBF
+    def add_camera_prefix_str(self, urdf_camera_str):
+        return self.camera_name_prefix + urdf_camera_str
+    
+    # def generate_body_data_from_ambf_soft_body(self, adf_data, obj_handle):
+    #     return
 
     def generate_body_data_from_ambf_rigid_body(self, adf_data, obj_handle):
 
@@ -1537,6 +1653,93 @@ class AMBF_OT_generate_ambf_file(Operator):
         joint_yaml_name = self.add_joint_prefix_str(joint_data['name'])
         adf_data[joint_yaml_name] = joint_data
         self._joint_names_list.append(joint_yaml_name)
+    
+    def generate_camera_data_from_ambf_camera(self, adf_data, camera_obj_handle):
+        if camera_obj_handle.ambf_object_type != 'CAMERA':
+            return
+        
+        # The object is unlinked from the scene. Don't write it
+        if self._context.scene.objects.get(camera_obj_handle.name) is None:
+            return
+
+        if is_object_hidden(camera_obj_handle) is True:
+            return
+
+        camera_template = CameraTemplate()
+        camera_data = camera_template._adf_data
+
+        if not compare_namespace_with_global(camera_obj_handle.name):
+            if get_namespace(camera_obj_handle.name) != '':
+                camera_data['namespace'] = get_namespace(camera_obj_handle.name)
+
+        camera_obj_handle_name = remove_namespace_prefix(camera_obj_handle.name)        
+        camera_data['name'] = camera_obj_handle_name
+
+        # Get camera properties
+        camera_data['fov'] = camera_obj_handle.data.angle
+        camera_data['near_clip'] = camera_obj_handle.data.clip_start
+        camera_data['far_clip'] = camera_obj_handle.data.clip_end
+
+        # Get camera position and orientation
+        world_pos = camera_obj_handle.matrix_world.translation
+        world_rot = camera_obj_handle.matrix_world.to_euler()
+        camera_pos = camera_data['location']['position']
+        camera_rot = camera_data['location']['orientation']
+        camera_pos['x'] = ambf_round(world_pos.x)
+        camera_pos['y'] = ambf_round(world_pos.y)
+        camera_pos['z'] = ambf_round(world_pos.z)
+        camera_rot['r'] = ambf_round(world_rot[0])
+        camera_rot['p'] = ambf_round(world_rot[1])
+        camera_rot['y'] = ambf_round(world_rot[2])
+
+        camera_yaml_name = self.add_body_prefix_str(camera_data['name'])
+        adf_data[camera_yaml_name] = camera_data
+        self.camera_name_prefix.append(camera_yaml_name)
+
+    def generate_light_data_from_ambf_camera(self, adf_data, light_obj_handle):
+        if light_obj_handle.ambf_object_type != 'LIGHT':
+            return
+        
+        # The object is unlinked from the scene. Don't write it
+        if self._context.scene.objects.get(light_obj_handle.name) is None:
+            return
+
+        if is_object_hidden(light_obj_handle) is True:
+            return
+
+        light_template = LightTemplate()
+        light_data = light_template._adf_data
+
+        if not compare_namespace_with_global(light_obj_handle.name):
+            if get_namespace(light_obj_handle.name) != '':
+                light_data['namespace'] = get_namespace(light_obj_handle.name)
+
+        light_obj_handle_name = remove_namespace_prefix(light_obj_handle.name)        
+        light_data['name'] = light_obj_handle_name
+
+        # Get light properties
+        light_data['type'] = light_obj_handle.data.type
+        light_data['energy'] = light_obj_handle.data.energy
+        light_data['color'] = light_obj_handle.data.color
+        light_data['distance'] = light_obj_handle.data.distance
+        light_data['spot_size'] = light_obj_handle.data.spot_size
+        light_data['spot_blend'] = light_obj_handle.data.spot_blend
+
+        # Get light position and orientation
+        world_pos = light_obj_handle.matrix_world.translation
+        world_rot = light_obj_handle.matrix_world.to_euler()
+        light_pos = light_data['location']['position']
+        light_rot = light_data['location']['orientation']
+        light_pos['x'] = ambf_round(world_pos.x)
+        light_pos['y'] = ambf_round(world_pos.y)
+        light_pos['z'] = ambf_round(world_pos.z)
+        light_rot['r'] = ambf_round(world_rot[0])
+        light_rot['p'] = ambf_round(world_rot[1])
+        light_rot['y'] = ambf_round(world_rot[2])
+
+        light_yaml_name = self.add_body_prefix_str(light_data['name'])
+        adf_data[light_yaml_name] = light_data
+        self.light_name_prefix.append(light_yaml_name)
 
     # Get the joints axis as a vector
     def get_axis_of_ambf_constraint(self, joint_obj_handle):
@@ -1709,6 +1912,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         joint_data['passive'] = joint_obj_handle.ambf_constraint_passive
 
     def generate_adf(self):
+        print('Handling generate_adf...')
         num_objs = len(bpy.data.objects)
         print('Number of objects in the scene: ', num_objs)
         print('Generating ADF {bpy.path.filepath}')
@@ -1729,6 +1933,8 @@ class AMBF_OT_generate_ambf_file(Operator):
         
         self._adf['bodies'] = []
         self._adf['joints'] = []
+        # TODO: Add camera support
+        # self._adf['cameras'] = []
         print('SAVE PATH', bpy.path.abspath(save_dir))
         print('AMBF CONFIG PATH', bpy.path.abspath(self._context.scene.ambf_meshes_path))
         rel_mesh_path = os.path.relpath(bpy.path.abspath(self._context.scene.ambf_meshes_path), bpy.path.abspath(save_dir))
@@ -1753,15 +1959,26 @@ class AMBF_OT_generate_ambf_file(Operator):
 
         _heirarichal_objects_list = populate_heirarchial_tree()
 
+        # TODO: 
+        # Optimize checking herarichal objects with single loop
+        # OOP -> organize and clean up the "for loop" 
+
         for obj_handle in _heirarichal_objects_list:
             self.generate_body_data_from_ambf_rigid_body(self._adf, obj_handle)
 
         for obj_handle in _heirarichal_objects_list:
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
 
+        # TODO: Add camera support
+        # for obj_handle in _heirarichal_objects_list:
+        #     self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
+
         # Now populate the bodies and joints tag
         self._adf['bodies'] = self._body_names_list
         self._adf['joints'] = self._joint_names_list
+
+        # TODO: Add camera support
+        # self._adf['cameras'] = self.camera_name_prefix
         
         yaml.dump(self._adf, output_file)
 
@@ -1776,7 +1993,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         prepend_comment_to_file(output_filename, header_str)
 
 
-class AMBF_OT_save_meshes(Operator):
+class AMBF_OT_save_meshes(Operator):#
     bl_idname = "ambf.save_meshes"
     bl_label = "Save Meshes"
     bl_description = "This saves the meshes in base folder specifed in the field above. Two folders" \
@@ -3997,6 +4214,7 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
 
 
 def register():
+
     from bpy.utils import register_class
     for cls in custom_classes:
         register_class(cls)
@@ -4469,7 +4687,7 @@ def register():
     Object.ambf_collision_shape_prop_collection = CollectionProperty(type=AMBF_PG_CollisionShapePropGroup)
 
 def unregister():
-    from bpy.utils import unregister_class
+    from bpy.utils import unregister_class    
     for cls in reversed(custom_classes):
         unregister_class(cls)
 
