@@ -2,6 +2,10 @@
 # Email: amunawar@wpi.edu
 # Lab: aimlab.wpi.edu
 
+# Editor: Vanessa Wang
+# Email: swang368@jh.edu
+# Lab: LCSR, Johns Hopkins University
+
 bl_info = {
     "name": "Asynchronous Multi-Body Framework (AMBF) Config Creator",
     "author": "Adnan Munawar",
@@ -321,16 +325,6 @@ def set_global_namespace(context, namespace):
         CommonConfig.namespace += '/'
     context.scene.ambf_namespace = CommonConfig.namespace
 
-
-def get_body_namespace(fullname):
-    print("Handling get_body_namespace...")
-    last_occurance = fullname.rfind('/')
-    _body_namespace = ''
-    if last_occurance >= 0:
-        # This means that the name contains a namespace
-        _body_namespace = fullname[0:last_occurance+1]
-    return _body_namespace
-
 def get_namespace(fullname):
     print("Handling get_namespace...")
     last_occurance = fullname.rfind('/')
@@ -354,33 +348,6 @@ def remove_namespace_prefix(full_name):
 def replace_dot_from_object_names(char_subs ='_'):
     for obj_handle in bpy.data.objects:
         obj_handle.name = obj_handle.name.replace('.', char_subs)
-
-
-def compare_body_namespace_with_global(fullname):
-    print("Handling compare_body_namespace_with_global...")
-    last_occurance = fullname.rfind('/')
-    _is_namespace_same = False
-    _body_namespace = ''
-    _name = ''
-    if last_occurance >= 0:
-        # This means that the name contains a namespace
-        _body_namespace = fullname[0:last_occurance+1]
-        _name = fullname[last_occurance+1:]
-
-        if CommonConfig.namespace == _body_namespace:
-            # The CommonConfig namespace is the same as the body namespace
-            _is_namespace_same = True
-        else:
-            # The CommonConfig namespace is different form body namespace
-            _is_namespace_same = False
-
-    else:
-        # The body's name does not contain and namespace
-        _is_namespace_same = False
-
-    print("FULLNAME: %s, BODY: %s, NAMESPACE: %s NAMESPACE_MATCHED: %d" %
-    (fullname, _name, _body_namespace, _is_namespace_same))
-    return _is_namespace_same
 
 def compare_namespace_with_global(fullname):
     print("Handling compare_namespace_with_global...")
@@ -416,6 +383,7 @@ def add_namespace_prefix(name):
 def get_grand_parent(body):
     grand_parent = body
     while grand_parent.parent is not None:
+        print('GRAND PARENT: ', grand_parent.name)
         grand_parent = grand_parent.parent
     return grand_parent
 
@@ -441,11 +409,12 @@ def populate_heirarchial_tree():
     _heirarchial_bodies_list = []
 
     for obj_handle in bpy.data.objects:
+        print('ADDING OBJ: ', obj_handle.name, 'TO HEIRARCHIAL LIST')
         _added_bodies_list[obj_handle] = False
 
     for obj_handle in bpy.data.objects:
         grand_parent = get_grand_parent(obj_handle)
-        # print('CALLING DOWNWARD TREE PASS FOR: ', grand_parent.name)
+        print('CALLING DOWNWARD TREE PASS FOR: ', grand_parent.name)
         downward_tree_pass(grand_parent, _heirarchial_bodies_list, _added_bodies_list)
 
     for body in _heirarchial_bodies_list:
@@ -465,21 +434,25 @@ def prepend_comment_to_file(filename, comment):
 
 
 def select_object(obj_handle, select=True):
+    # print(obj_handle.name)
     obj_handle.select_set(select)
 
 
 def select_objects(obj_handles, select=True):
+    print('SELECTING OBJECTS: ', len(obj_handles))
     for obj_handle in obj_handles:
         select_object(obj_handle, select)
 
 
 def select_all_objects(select):
+    print('SELECTING ALL OBJECTS: ', len(bpy.data.objects))
     # First deselect all objects
     for obj_handle in bpy.data.objects:
         select_object(obj_handle, select)
 
 
 def hide_object(object, hide):
+    # print('HIDING OBJECT: ', object.name)
     if object:
         # object.hide = hide
         object.hide_set(hide)
@@ -900,6 +873,7 @@ def load_blender_mesh(context, mesh_filepath, name):
 
 
 def save_blender_mesh(obj_handle, mesh_filepath, mesh_type, use_mesh_modifiers):
+    print('\nHandle Save Blender Mesh: ', obj_handle.name, 'TO: ', mesh_filepath)
     hide_state = is_object_hidden(obj_handle)
     hide_object(obj_handle, False)
     select_object(obj_handle, True)
@@ -1260,6 +1234,9 @@ class AMBF_OT_generate_ambf_file(Operator):
         self.body_name_prefix = 'BODY '
         self.joint_name_prefix = 'JOINT '
         self.camera_name_prefix = 'CAMERA '
+        self.light_name_prefix = 'LIGHT '
+        self.sensor_name_prefix = 'SENSOR '
+        self.actuator_name_prefix = 'ACTUATOR '
         self._adf = None
         self._context = None
 
@@ -1280,46 +1257,58 @@ class AMBF_OT_generate_ambf_file(Operator):
     def add_camera_prefix_str(self, urdf_camera_str):
         return self.camera_name_prefix + urdf_camera_str
     
-    # def generate_body_data_from_ambf_soft_body(self, adf_data, obj_handle):
+    # This method add the light prefix if set to all the lights in AMBF
+    def add_light_prefix_str(self, urdf_light_str):
+        return self.light_name_prefix + urdf_light_str
+    
+    # This method add the sensor prefix if set to all the sensors in AMBF
+    def add_sensor_prefix_str(self, urdf_sensor_str):
+        return self.sensor_name_prefix + urdf_sensor_str
+    
+    # This method add the actuator prefix if set to all the actuators in AMBF
+    def add_actuator_prefix_str(self, urdf_actuator_str):
+        return self.actuator_name_prefix + urdf_actuator_str
+    
+    # def generate_body_data_from_ambf_soft_body(self, adf_data, body_obj_handle):
     #     return
 
-    def generate_body_data_from_ambf_rigid_body(self, adf_data, obj_handle):
+    def generate_body_data_from_ambf_rigid_body(self, adf_data, body_obj_handle):
 
-        if obj_handle.ambf_object_type != 'RIGID_BODY':
+        if body_obj_handle.ambf_object_type != 'RIGID_BODY':
             return
 
         # The object is unlinked from the scene. Don't write it
-        if self._context.scene.objects.get(obj_handle.name) is None:
+        if self._context.scene.objects.get(body_obj_handle.name) is None:
             return
 
-        if is_object_hidden(obj_handle) is True:
+        if is_object_hidden(body_obj_handle) is True:
             return
 
         body = BodyTemplate()
         body_data = body._adf_data
 
-        if not compare_body_namespace_with_global(obj_handle.name):
-            if get_body_namespace(obj_handle.name) != '':
-                body_data['namespace'] = get_body_namespace(obj_handle.name)
+        if not compare_namespace_with_global(body_obj_handle.name):
+            if get_namespace(body_obj_handle.name) != '':
+                body_data['namespace'] = get_namespace(body_obj_handle.name)
 
-        obj_handle_name = remove_namespace_prefix(obj_handle.name)
+        body_obj_handle_name = remove_namespace_prefix(body_obj_handle.name)
 
-        body_yaml_name = self.add_body_prefix_str(obj_handle_name)
+        body_yaml_name = self.add_body_prefix_str(body_obj_handle_name)
         output_mesh = bpy.context.scene.ambf_meshes_save_type
-        body_data['name'] = obj_handle_name
+        body_data['name'] = body_obj_handle_name
         
-        body_data['passive'] = obj_handle.ambf_rigid_body_passive
-        if obj_handle.ambf_rigid_body_passive:
+        body_data['passive'] = body_obj_handle.ambf_rigid_body_passive
+        if body_obj_handle.ambf_rigid_body_passive:
             body_data['publish children names'] = False
             body_data['publish joint names'] = False
             body_data['publish joint positions'] = False
         else:
-            body_data['publish children names'] = obj_handle.ambf_rigid_body_publish_children_names
-            body_data['publish joint names'] = obj_handle.ambf_rigid_body_publish_joint_names
-            body_data['publish joint positions'] = obj_handle.ambf_rigid_body_publish_joint_positions
+            body_data['publish children names'] = body_obj_handle.ambf_rigid_body_publish_children_names
+            body_data['publish joint names'] = body_obj_handle.ambf_rigid_body_publish_joint_names
+            body_data['publish joint positions'] = body_obj_handle.ambf_rigid_body_publish_joint_positions
 
-        world_pos = obj_handle.matrix_world.translation
-        world_rot = obj_handle.matrix_world.to_euler()
+        world_pos = body_obj_handle.matrix_world.translation
+        world_rot = body_obj_handle.matrix_world.to_euler()
         body_pos = body_data['location']['position']
         body_rot = body_data['location']['orientation']
         body_pos['x'] = ambf_round(world_pos.x)
@@ -1329,75 +1318,75 @@ class AMBF_OT_generate_ambf_file(Operator):
         body_rot['p'] = ambf_round(world_rot[1])
         body_rot['y'] = ambf_round(world_rot[2])
 
-        if obj_handle.type == 'EMPTY':
+        if body_obj_handle.type == 'EMPTY':
             body_data['mesh'] = ''
-            if obj_handle_name in ['world', 'World', 'WORLD']:
+            if body_obj_handle_name in ['world', 'World', 'WORLD']:
                 body_data['mass'] = 0
             else:
-                if obj_handle.ambf_rigid_body_is_static:
+                if body_obj_handle.ambf_rigid_body_is_static:
                     body_data['mass'] = 0.0
                 else:
-                    body_data['mass'] = obj_handle.ambf_rigid_body_mass
-                    if obj_handle.ambf_rigid_body_specify_inertia:
-                        body_data['inertia'] = {'ix': ambf_round(obj_handle.ambf_rigid_body_inertia_x),
-                                                'iy': ambf_round(obj_handle.ambf_rigid_body_inertia_y),
-                                                'iz': ambf_round(obj_handle.ambf_rigid_body_inertia_z)}
+                    body_data['mass'] = body_obj_handle.ambf_rigid_body_mass
+                    if body_obj_handle.ambf_rigid_body_specify_inertia:
+                        body_data['inertia'] = {'ix': ambf_round(body_obj_handle.ambf_rigid_body_inertia_x),
+                                                'iy': ambf_round(body_obj_handle.ambf_rigid_body_inertia_y),
+                                                'iz': ambf_round(body_obj_handle.ambf_rigid_body_inertia_z)}
                     else:
                         body_data['inertia'] = {'ix': 0.01, 'iy': 0.01, 'iz': 0.01}
 
-        elif obj_handle.type == 'MESH':
+        elif body_obj_handle.type == 'MESH':
 
-            if obj_handle.ambf_rigid_body_is_static:
+            if body_obj_handle.ambf_rigid_body_is_static:
                 body_data['mass'] = 0.0
             else:
-                body_data['mass'] = ambf_round(obj_handle.ambf_rigid_body_mass)
-                if obj_handle.ambf_rigid_body_specify_inertia:
-                    body_data['inertia'] = {'ix': ambf_round(obj_handle.ambf_rigid_body_inertia_x),
-                                            'iy': ambf_round(obj_handle.ambf_rigid_body_inertia_y),
-                                            'iz': ambf_round(obj_handle.ambf_rigid_body_inertia_z)}
+                body_data['mass'] = ambf_round(body_obj_handle.ambf_rigid_body_mass)
+                if body_obj_handle.ambf_rigid_body_specify_inertia:
+                    body_data['inertia'] = {'ix': ambf_round(body_obj_handle.ambf_rigid_body_inertia_x),
+                                            'iy': ambf_round(body_obj_handle.ambf_rigid_body_inertia_y),
+                                            'iz': ambf_round(body_obj_handle.ambf_rigid_body_inertia_z)}
                 else:
                     # We can delete the inertia as it will be estimated in AMBF
                     del body_data['inertia']
 
-            if obj_handle.ambf_object_override_gravity:
-                body_data['gravity'] = {'x': obj_handle.ambf_object_gravity[0],
-                                        'y': obj_handle.ambf_object_gravity[1],
-                                        'z': obj_handle.ambf_object_gravity[2]}
+            if body_obj_handle.ambf_object_override_gravity:
+                body_data['gravity'] = {'x': body_obj_handle.ambf_object_gravity[0],
+                                        'y': body_obj_handle.ambf_object_gravity[1],
+                                        'z': body_obj_handle.ambf_object_gravity[2]}
 
-            body_data['friction'] = {'static': ambf_round(obj_handle.ambf_rigid_body_static_friction),
-                                     'rolling': ambf_round(obj_handle.ambf_rigid_body_rolling_friction)}
+            body_data['friction'] = {'static': ambf_round(body_obj_handle.ambf_rigid_body_static_friction),
+                                     'rolling': ambf_round(body_obj_handle.ambf_rigid_body_rolling_friction)}
 
-            body_data['restitution'] = ambf_round(obj_handle.ambf_rigid_body_restitution)
+            body_data['restitution'] = ambf_round(body_obj_handle.ambf_rigid_body_restitution)
 
-            body_data['damping'] = {'linear': ambf_round(obj_handle.ambf_rigid_body_linear_damping),
-                                    'angular': ambf_round(obj_handle.ambf_rigid_body_angular_damping)}
+            body_data['damping'] = {'linear': ambf_round(body_obj_handle.ambf_rigid_body_linear_damping),
+                                    'angular': ambf_round(body_obj_handle.ambf_rigid_body_angular_damping)}
 
-            body_data['visible'] = obj_handle.ambf_object_visible
+            body_data['visible'] = body_obj_handle.ambf_object_visible
 
-            body_data['collision groups'] = [idx for idx, chk in enumerate(obj_handle.ambf_collision_groups) if chk == True]
+            body_data['collision groups'] = [idx for idx, chk in enumerate(body_obj_handle.ambf_collision_groups) if chk == True]
 
-            if obj_handle.ambf_collision_margin_enable is True:
-                body_data['collision margin'] = ambf_round(obj_handle.ambf_collision_margin)
+            if body_obj_handle.ambf_collision_margin_enable is True:
+                body_data['collision margin'] = ambf_round(body_obj_handle.ambf_collision_margin)
 
-            if obj_handle.ambf_collision_type == 'MESH':
-                body_data['collision mesh type'] = obj_handle.ambf_collision_mesh_type
-                if obj_handle.ambf_use_separate_collision_mesh:
-                    if obj_handle.ambf_collision_mesh:
+            if body_obj_handle.ambf_collision_type == 'MESH':
+                body_data['collision mesh type'] = body_obj_handle.ambf_collision_mesh_type
+                if body_obj_handle.ambf_use_separate_collision_mesh:
+                    if body_obj_handle.ambf_collision_mesh:
                         body_data['collision mesh'] = \
-                            remove_namespace_prefix(obj_handle.ambf_collision_mesh.name + '.' + output_mesh)
+                            remove_namespace_prefix(body_obj_handle.ambf_collision_mesh.name + '.' + output_mesh)
                     else:
-                        raise Exception("ERROR! For object ", obj_handle.name, " \" Use Separate Collision Mesh\" is \"True\" but \"Collision Mesh\" not specified.")
+                        raise Exception("ERROR! For object ", body_obj_handle.name, " \" Use Separate Collision Mesh\" is \"True\" but \"Collision Mesh\" not specified.")
                 else:
                     del body_data['collision mesh']
             else:
                 del body_data['collision mesh']
                 del body_data['collision mesh type']
 
-                if obj_handle.ambf_collision_type == 'SINGULAR_SHAPE':
-                    shape_prop_group = obj_handle.ambf_collision_shape_prop_collection.items()[0][1]
+                if body_obj_handle.ambf_collision_type == 'SINGULAR_SHAPE':
+                    shape_prop_group = body_obj_handle.ambf_collision_shape_prop_collection.items()[0][1]
                     body_data['collision shape'] = shape_prop_group.ambf_collision_shape
                     bcg = OrderedDict()
-                    dims = obj_handle.dimensions.copy()
+                    dims = body_obj_handle.dimensions.copy()
                     # Now we need to find out the geometry of the shape
                     if shape_prop_group.ambf_collision_shape == 'BOX':
                         bcg = get_xyz_ordered_dict()
@@ -1420,12 +1409,12 @@ class AMBF_OT_generate_ambf_file(Operator):
                     offset['orientation']['p'] = ambf_round(shape_prop_group.ambf_collision_shape_angular_offset[1])
                     offset['orientation']['y'] = ambf_round(shape_prop_group.ambf_collision_shape_angular_offset[2])
                     body_data['collision offset'] = offset
-                elif obj_handle.ambf_collision_type == 'COMPOUND_SHAPE':
+                elif body_obj_handle.ambf_collision_type == 'COMPOUND_SHAPE':
                     if 'collision shape' in body_data:
                         del body_data['collision shape']
                     compound_shape = []
                     shape_count = 0
-                    for prop_tuple in obj_handle.ambf_collision_shape_prop_collection.items():
+                    for prop_tuple in body_obj_handle.ambf_collision_shape_prop_collection.items():
                         shape_prop_group = prop_tuple[1]
                         bcg = OrderedDict()
                         bcg['name'] = str(shape_count + 1)
@@ -1458,15 +1447,15 @@ class AMBF_OT_generate_ambf_file(Operator):
 
                     body_data['compound collision shape'] = compound_shape
 
-            body_data['mesh'] = obj_handle_name + '.' + output_mesh
+            body_data['mesh'] = body_obj_handle_name + '.' + output_mesh
             xyz_inertial_off = get_xyz_ordered_dict()
-            xyz_inertial_off['x'] = ambf_round(obj_handle.ambf_rigid_body_linear_inertial_offset[0])
-            xyz_inertial_off['y'] = ambf_round(obj_handle.ambf_rigid_body_linear_inertial_offset[1])
-            xyz_inertial_off['z'] = ambf_round(obj_handle.ambf_rigid_body_linear_inertial_offset[2])
+            xyz_inertial_off['x'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_inertial_offset[0])
+            xyz_inertial_off['y'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_inertial_offset[1])
+            xyz_inertial_off['z'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_inertial_offset[2])
 
             body_data['inertial offset']['position'] = xyz_inertial_off
 
-            if obj_handle.data.materials:
+            if body_obj_handle.data.materials:
                 del body_data['color']
                 if output_mesh == 'OBJ':# If saving as OBJ, ignore material info.
                     body_data['use material'] = False
@@ -1479,7 +1468,7 @@ class AMBF_OT_generate_ambf_file(Operator):
                                                  'ambient': {'level': 0.5},
                                                  'transparency': 1.0}
 
-                mat = obj_handle.data.materials[0]
+                mat = body_obj_handle.data.materials[0]
                 body_data['color components']['diffuse']['r'] = ambf_round(mat.diffuse_color[0])
                 body_data['color components']['diffuse']['g'] = ambf_round(mat.diffuse_color[1])
                 body_data['color components']['diffuse']['b'] = ambf_round(mat.diffuse_color[2])
@@ -1497,22 +1486,22 @@ class AMBF_OT_generate_ambf_file(Operator):
                 body_data['color components']['transparency'] = ambf_round(mat.diffuse_color[3])
 
             # Set the body controller data from the controller props
-            if obj_handle.ambf_rigid_body_enable_controllers is True:
+            if body_obj_handle.ambf_rigid_body_enable_controllers is True:
                 _controller_gains = OrderedDict()
                 _lin_gains = OrderedDict()
                 _ang_gains = OrderedDict()
-                _lin_gains['P'] = ambf_round(obj_handle.ambf_rigid_body_linear_controller_p_gain)
-                _lin_gains['I'] = ambf_round(obj_handle.ambf_rigid_body_linear_controller_i_gain)
-                _lin_gains['D'] = ambf_round(obj_handle.ambf_rigid_body_linear_controller_d_gain)
+                _lin_gains['P'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_controller_p_gain)
+                _lin_gains['I'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_controller_i_gain)
+                _lin_gains['D'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_controller_d_gain)
 
-                _ang_gains['P'] = ambf_round(obj_handle.ambf_rigid_body_angular_controller_p_gain)
-                _ang_gains['I'] = ambf_round(obj_handle.ambf_rigid_body_angular_controller_i_gain)
-                _ang_gains['D'] = ambf_round(obj_handle.ambf_rigid_body_angular_controller_d_gain)
+                _ang_gains['P'] = ambf_round(body_obj_handle.ambf_rigid_body_angular_controller_p_gain)
+                _ang_gains['I'] = ambf_round(body_obj_handle.ambf_rigid_body_angular_controller_i_gain)
+                _ang_gains['D'] = ambf_round(body_obj_handle.ambf_rigid_body_angular_controller_d_gain)
 
                 _controller_gains['linear'] = _lin_gains
                 _controller_gains['angular'] = _ang_gains
                 body_data['controller'] = _controller_gains
-                body_data['controller output type'] = obj_handle.ambf_rigid_body_controller_output_type
+                body_data['controller output type'] = body_obj_handle.ambf_rigid_body_controller_output_type
             else:
                 if 'controller' in body_data:
                     del body_data['controller']
@@ -1655,91 +1644,93 @@ class AMBF_OT_generate_ambf_file(Operator):
         self._joint_names_list.append(joint_yaml_name)
     
     def generate_camera_data_from_ambf_camera(self, adf_data, camera_obj_handle):
+        # print("\nCAMERA NAME: ", camera_obj_handle.name)
         if camera_obj_handle.ambf_object_type != 'CAMERA':
             return
         
-        # The object is unlinked from the scene. Don't write it
-        if self._context.scene.objects.get(camera_obj_handle.name) is None:
-            return
+        # # The object is unlinked from the scene. Don't write it
+        # if self._context.scene.objects.get(camera_obj_handle.name) is None:
+        #     return
 
-        if is_object_hidden(camera_obj_handle) is True:
-            return
+        # if is_object_hidden(camera_obj_handle) is True:
+        #     return
 
-        camera_template = CameraTemplate()
-        camera_data = camera_template._adf_data
+        # camera_template = CameraTemplate()
+        # camera_data = camera_template._adf_data
 
-        if not compare_namespace_with_global(camera_obj_handle.name):
-            if get_namespace(camera_obj_handle.name) != '':
-                camera_data['namespace'] = get_namespace(camera_obj_handle.name)
+        # if not compare_namespace_with_global(camera_obj_handle.name):
+        #     if get_namespace(camera_obj_handle.name) != '':
+        #         camera_data['namespace'] = get_namespace(camera_obj_handle.name)
 
-        camera_obj_handle_name = remove_namespace_prefix(camera_obj_handle.name)        
-        camera_data['name'] = camera_obj_handle_name
+        # camera_obj_handle_name = remove_namespace_prefix(camera_obj_handle.name)
+        # print("CAMERA NAME: ", camera_obj_handle_name)        
+        # camera_data['name'] = camera_obj_handle_name
 
-        # Get camera properties
-        camera_data['fov'] = camera_obj_handle.data.angle
-        camera_data['near_clip'] = camera_obj_handle.data.clip_start
-        camera_data['far_clip'] = camera_obj_handle.data.clip_end
+        # # Get camera properties
+        # camera_data['fov'] = camera_obj_handle.data.angle
+        # camera_data['near_clip'] = camera_obj_handle.data.clip_start
+        # camera_data['far_clip'] = camera_obj_handle.data.clip_end
 
-        # Get camera position and orientation
+        # # Get camera position and orientation
         world_pos = camera_obj_handle.matrix_world.translation
-        world_rot = camera_obj_handle.matrix_world.to_euler()
-        camera_pos = camera_data['location']['position']
-        camera_rot = camera_data['location']['orientation']
-        camera_pos['x'] = ambf_round(world_pos.x)
-        camera_pos['y'] = ambf_round(world_pos.y)
-        camera_pos['z'] = ambf_round(world_pos.z)
-        camera_rot['r'] = ambf_round(world_rot[0])
-        camera_rot['p'] = ambf_round(world_rot[1])
-        camera_rot['y'] = ambf_round(world_rot[2])
+        # world_rot = camera_obj_handle.matrix_world.to_euler()
+        # camera_pos = camera_data['location']['position']
+        # camera_rot = camera_data['location']['orientation']
+        # camera_pos['x'] = ambf_round(world_pos.x)
+        # camera_pos['y'] = ambf_round(world_pos.y)
+        # camera_pos['z'] = ambf_round(world_pos.z)
+        # camera_rot['r'] = ambf_round(world_rot[0])
+        # camera_rot['p'] = ambf_round(world_rot[1])
+        # camera_rot['y'] = ambf_round(world_rot[2])
 
-        camera_yaml_name = self.add_body_prefix_str(camera_data['name'])
-        adf_data[camera_yaml_name] = camera_data
-        self.camera_name_prefix.append(camera_yaml_name)
+        # camera_yaml_name = self.add_body_prefix_str(camera_data['name'])
+        # adf_data[camera_yaml_name] = camera_data
+        # self.camera_name_prefix.append(camera_yaml_name)
 
-    def generate_light_data_from_ambf_camera(self, adf_data, light_obj_handle):
-        if light_obj_handle.ambf_object_type != 'LIGHT':
-            return
+    # def generate_light_data_from_ambf_light(self, adf_data, light_obj_handle):
+    #     if light_obj_handle.ambf_object_type != 'LIGHT':
+    #         return
         
-        # The object is unlinked from the scene. Don't write it
-        if self._context.scene.objects.get(light_obj_handle.name) is None:
-            return
+    #     # The object is unlinked from the scene. Don't write it
+    #     if self._context.scene.objects.get(light_obj_handle.name) is None:
+    #         return
 
-        if is_object_hidden(light_obj_handle) is True:
-            return
+    #     if is_object_hidden(light_obj_handle) is True:
+    #         return
 
-        light_template = LightTemplate()
-        light_data = light_template._adf_data
+    #     light_template = LightTemplate()
+    #     light_data = light_template._adf_data
 
-        if not compare_namespace_with_global(light_obj_handle.name):
-            if get_namespace(light_obj_handle.name) != '':
-                light_data['namespace'] = get_namespace(light_obj_handle.name)
+    #     if not compare_namespace_with_global(light_obj_handle.name):
+    #         if get_namespace(light_obj_handle.name) != '':
+    #             light_data['namespace'] = get_namespace(light_obj_handle.name)
 
-        light_obj_handle_name = remove_namespace_prefix(light_obj_handle.name)        
-        light_data['name'] = light_obj_handle_name
+    #     light_obj_handle_name = remove_namespace_prefix(light_obj_handle.name)        
+    #     light_data['name'] = light_obj_handle_name
 
-        # Get light properties
-        light_data['type'] = light_obj_handle.data.type
-        light_data['energy'] = light_obj_handle.data.energy
-        light_data['color'] = light_obj_handle.data.color
-        light_data['distance'] = light_obj_handle.data.distance
-        light_data['spot_size'] = light_obj_handle.data.spot_size
-        light_data['spot_blend'] = light_obj_handle.data.spot_blend
+    #     # Get light properties
+    #     light_data['type'] = light_obj_handle.data.type
+    #     light_data['energy'] = light_obj_handle.data.energy
+    #     light_data['color'] = light_obj_handle.data.color
+    #     light_data['distance'] = light_obj_handle.data.distance
+    #     light_data['spot_size'] = light_obj_handle.data.spot_size
+    #     light_data['spot_blend'] = light_obj_handle.data.spot_blend
 
-        # Get light position and orientation
-        world_pos = light_obj_handle.matrix_world.translation
-        world_rot = light_obj_handle.matrix_world.to_euler()
-        light_pos = light_data['location']['position']
-        light_rot = light_data['location']['orientation']
-        light_pos['x'] = ambf_round(world_pos.x)
-        light_pos['y'] = ambf_round(world_pos.y)
-        light_pos['z'] = ambf_round(world_pos.z)
-        light_rot['r'] = ambf_round(world_rot[0])
-        light_rot['p'] = ambf_round(world_rot[1])
-        light_rot['y'] = ambf_round(world_rot[2])
+    #     # Get light position and orientation
+    #     world_pos = light_obj_handle.matrix_world.translation
+    #     world_rot = light_obj_handle.matrix_world.to_euler()
+    #     light_pos = light_data['location']['position']
+    #     light_rot = light_data['location']['orientation']
+    #     light_pos['x'] = ambf_round(world_pos.x)
+    #     light_pos['y'] = ambf_round(world_pos.y)
+    #     light_pos['z'] = ambf_round(world_pos.z)
+    #     light_rot['r'] = ambf_round(world_rot[0])
+    #     light_rot['p'] = ambf_round(world_rot[1])
+    #     light_rot['y'] = ambf_round(world_rot[2])
 
-        light_yaml_name = self.add_body_prefix_str(light_data['name'])
-        adf_data[light_yaml_name] = light_data
-        self.light_name_prefix.append(light_yaml_name)
+    #     light_yaml_name = self.add_body_prefix_str(light_data['name'])
+    #     adf_data[light_yaml_name] = light_data
+    #     self.light_name_prefix.append(light_yaml_name)
 
     # Get the joints axis as a vector
     def get_axis_of_ambf_constraint(self, joint_obj_handle):
@@ -1912,10 +1903,9 @@ class AMBF_OT_generate_ambf_file(Operator):
         joint_data['passive'] = joint_obj_handle.ambf_constraint_passive
 
     def generate_adf(self):
-        print('Handling generate_adf...')
+        print('\n######### GENERATE ADF #########')
         num_objs = len(bpy.data.objects)
         print('Number of objects in the scene: ', num_objs)
-        print('Generating ADF {bpy.path.filepath}')
         save_to = bpy.path.abspath(self._context.scene.ambf_adf_path)
         filename = os.path.basename(save_to)
         save_dir = os.path.dirname(save_to)
@@ -1933,8 +1923,11 @@ class AMBF_OT_generate_ambf_file(Operator):
         
         self._adf['bodies'] = []
         self._adf['joints'] = []
-        # TODO: Add camera support
-        # self._adf['cameras'] = []
+        self._adf['cameras'] = []
+        self._adf['lights'] = []
+        self._adf['sensors'] = []
+        self._adf['actuators'] = []
+
         print('SAVE PATH', bpy.path.abspath(save_dir))
         print('AMBF CONFIG PATH', bpy.path.abspath(self._context.scene.ambf_meshes_path))
         rel_mesh_path = os.path.relpath(bpy.path.abspath(self._context.scene.ambf_meshes_path), bpy.path.abspath(save_dir))
@@ -1965,20 +1958,13 @@ class AMBF_OT_generate_ambf_file(Operator):
 
         for obj_handle in _heirarichal_objects_list:
             self.generate_body_data_from_ambf_rigid_body(self._adf, obj_handle)
-
-        for obj_handle in _heirarichal_objects_list:
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
-
-        # TODO: Add camera support
-        # for obj_handle in _heirarichal_objects_list:
-        #     self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
+            self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
 
         # Now populate the bodies and joints tag
         self._adf['bodies'] = self._body_names_list
         self._adf['joints'] = self._joint_names_list
-
-        # TODO: Add camera support
-        # self._adf['cameras'] = self.camera_name_prefix
+        self._adf['cameras'] = self.camera_name_prefix 
         
         yaml.dump(self._adf, output_file)
 
@@ -2053,6 +2039,7 @@ class AMBF_OT_save_meshes(Operator):#
                 self.reset_back_to_default(p_obj_handle, original_obj_poses_map)
 
     def save_body_textures(self, context, obj_handle, high_res_path):
+        print("Saving Textures for Object: ", obj_handle.name)
         if obj_handle.type == 'MESH':
             # First save the texture(s) if any
             # Store current render settings
@@ -2077,18 +2064,22 @@ class AMBF_OT_save_meshes(Operator):#
     def save_body_meshes(self, context, obj_handle, mesh_type, high_res_path, low_res_path):
         if not obj_handle.ambf_object_type == 'RIGID_BODY':
             # Only Save Meshes if the object type is ambf rigid body
+            print("Object Type is not Rigid Body, Skipping Mesh Save")
             return
 
         obj_handle_name = remove_namespace_prefix(obj_handle.name)
 
         if obj_handle.type == 'MESH':
+            print("Saving Mesh for Rigid Body: ", obj_handle.name)
             # SAVE HIGH RES / VISUAL MESHES FIRST
             if context.scene.ambf_save_high_res:
+                print("Saving High Res Mesh for Object: ", obj_handle.name)
                 filename_high_res = os.path.join(high_res_path, obj_handle_name)
                 save_blender_mesh(obj_handle, filename_high_res, mesh_type, False)
 
             # NOW SAVE LOW RES MESHES
             if context.scene.ambf_save_low_res:
+                print("Saving Low Res Mesh for Object: ", obj_handle.name)
                 if obj_handle.ambf_use_separate_collision_mesh:
                     if obj_handle.ambf_collision_mesh:
                         coll_mesh_name = remove_namespace_prefix(obj_handle.ambf_collision_mesh.name)
@@ -2101,14 +2092,18 @@ class AMBF_OT_save_meshes(Operator):#
                     save_blender_mesh(obj_handle, filename_low_res, mesh_type, True)
 
     def save_meshes(self, context):
+        print("\nSaving Meshes......")
         # Get the list of currently selected objects
         if context.scene.ambf_save_selection_only:
             objects_to_save = get_selected_objects()
+            print("Saving Selected Objects Only", objects_to_save)
         else:
+            print("Saving All Objects")
             objects_to_save = bpy.data.objects
 
         # Now deselect all objects
         select_all_objects(False)
+        print("###### Done Deselecting Objects ######")
 
         save_path = bpy.path.abspath(context.scene.ambf_meshes_path)
         high_res_path = os.path.join(save_path, 'high_res/')
@@ -2116,6 +2111,8 @@ class AMBF_OT_save_meshes(Operator):#
         os.makedirs(high_res_path, exist_ok=True)
         os.makedirs(low_res_path, exist_ok=True)
         mesh_type = bpy.context.scene.ambf_meshes_save_type
+        
+        print(f"Save to: {save_path} with mesh type: {mesh_type}")
 
         original_obj_poses_map = self.set_all_meshes_to_origin()
         for obj_handle in objects_to_save:
@@ -2125,6 +2122,8 @@ class AMBF_OT_save_meshes(Operator):#
 
         # Now reselect the objects that we selected prior to saving meshes
         select_objects(objects_to_save, True)
+        print("###### Done Reselecting Saving Objects ######")
+
 
 
 class AMBF_OT_generate_low_res_mesh_modifiers(Operator):
@@ -2169,6 +2168,32 @@ class AMBF_OT_create_joint(Operator):
         active_obj_handle = get_active_object()
         active_obj_handle.name = 'joint'
         return {'FINISHED'}
+    
+class OBJECT_PT_DebuggerPanel(bpy.types.Panel):
+    """Creates a Panel in the Object properties window"""
+    bl_label = "Debugger Panel"
+    bl_idname = "OBJECT_PT_debugger"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+
+        if obj:
+            # Display the name and type of the current object
+            row = layout.row()
+            row.label(text="Active Object:", icon='OBJECT_DATA')
+            
+            row = layout.row()
+            row.label(text="Name: " + obj.name)
+
+            row = layout.row()
+            row.label(text="Type: " + obj.type)
+        else:
+            row = layout.row()
+            row.label(text="No active object")
 
 
 class AMBF_OT_remove_low_res_mesh_modifiers(Operator):
@@ -2676,6 +2701,25 @@ class AMBF_OT_load_ambf_file(Operator):
             obj_handle.name = _body_namespace + af_name
         else:
             obj_handle.name = add_namespace_prefix(af_name)
+    
+    def load_camera_location(self, camera_data, obj_handle):
+        bpy.ops.object.transform_apply(scale=True)
+
+        camera_location_xyz = {'x': 0, 'y': 0, 'z': 0}
+        camera_location_rpy = {'r': 0, 'p': 0, 'y': 0}
+
+        if 'location' in camera_data:
+            if 'position' in camera_data['location']:
+                camera_location_xyz = camera_data['location']['position']
+            if 'orientation' in camera_data['location']:
+                camera_location_rpy = camera_data['location']['orientation']
+
+        obj_handle.location[0] = camera_location_xyz['x']
+        obj_handle.location[1] = camera_location_xyz['y']
+        obj_handle.location[2] = camera_location_xyz['z']
+        obj_handle.rotation_euler = (camera_location_rpy['r'],
+                                    camera_location_rpy['p'],
+                                    camera_location_rpy['y'])
 
     def load_body_location(self, body_data, obj_handle):
 
@@ -2728,6 +2772,20 @@ class AMBF_OT_load_ambf_file(Operator):
 
         self._blender_remapped_body_names[ghost_name] = obj_handle.name
         CommonConfig.loaded_body_map[obj_handle] = ghost_data
+    
+    def load_sensor(self, sensor_name):
+        sensor_data = self._adf_data[sensor_name]
+
+        obj_handle = self.load_ambf_mesh(sensor_data, sensor_name)
+
+        self.load_object_name(sensor_data, obj_handle)
+
+        self.load_body_location(sensor_data, obj_handle)
+
+        self.load_material(sensor_data, obj_handle)
+
+        self._blender_remapped_body_names[sensor_name] = obj_handle.name
+        CommonConfig.loaded_body_map[obj_handle] = sensor_data
 
     def get_ambf_joint_type(self, joint_data):
         joint_type = 'FIXED'
@@ -3085,6 +3143,8 @@ class AMBF_OT_load_ambf_file(Operator):
             self._adf_data = yaml.load(yaml_file, Loader=yaml.FullLoader)
         else:
             self._adf_data = yaml.load(yaml_file)
+
+        # print(self._adf_data)
         self._context = context
 
         try:
@@ -3096,6 +3156,16 @@ class AMBF_OT_load_ambf_file(Operator):
             joints_list = self._adf_data['joints']
         except:
             joints_list = []
+
+        try:
+            sensors_list = self._adf_data['sensors']
+        except:
+            sensors_list = []
+
+        try:
+            sensors_list = self._adf_data['actuators']
+        except:
+            sensors_list = []
 
         if 'namespace' in self._adf_data:
             set_global_namespace(context, self._adf_data['namespace'])
@@ -3150,6 +3220,16 @@ class AMBF_OT_cleanup_all(Operator):
     def execute(self, context):
         for o in bpy.data.objects:
             bpy.data.objects.remove(o)
+        return {'FINISHED'}
+    
+
+class AMBF_OT_select_all(Operator):
+    """Add Rigid Body Properties"""
+    bl_label = "SELECT ALL"
+    bl_idname = "ambf.ambf_select_all"
+
+    def execute(self, context):
+        select_all_objects(True)
         return {'FINISHED'}
 
 
@@ -3324,22 +3404,27 @@ class AMBF_OT_ambf_collision_mesh_use_current_location(Operator):
 
 class AMBF_PT_main_panel(Panel):
     """Creates a Panel in the Tool Shelf"""
-    bl_label = "LOAD, CREATE AND SAVE ADFs"
+    bl_label = "IMPORT, MAKE AND EXPORT ADFs"
     bl_idname = "AMBF_PT_main_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "AMBF"
+
+    ambf_object_types = ['RIGID_BODY', 'CONSTRAINT', 'COLLISION_SHAPE', 'GHOST_OBJECT', 'CAMERA', 'LIGHT', 'SENSOR', 'ACTUATOR']
 
     setup_yaml()
     set_view_transform_orientation_to_local()
 
     def draw(self, context):
 
+        # print('\n######### Drawing addon main Panel #########')
+
         # Sanity check, if there are any objects
         # that have been unlinked from the scene. Delete them
         for o in bpy.data.objects:
-            if o.ambf_object_type in ['RIGID_BODY', 'CONSTRAINT', 'COLLISION_SHAPE']:
+            if o.ambf_object_type in self.ambf_object_types:
                 if context.scene.objects.get(o.name) is None:
+                    print('Object: ', o.name, ' is not in the scene')
                 # if bpy.data.objects[o.name] is None:
                     bpy.data.objects.remove(o)
 
@@ -3350,7 +3435,7 @@ class AMBF_PT_main_panel(Panel):
         
         box = layout.box()
         box.enabled = context.scene.ambf_enable_forced_cleanup
-        box.label(text='WARNING! CLEAN UP ALL OBJECTS')
+        box.label(text='!!CAUTION !! FORCED CLEANUP!!')
 
         col = box.column()
         col.operator("ambf.ambf_cleanup_all")
@@ -3511,6 +3596,9 @@ class AMBF_PT_main_panel(Panel):
         row = box.row()
         row.alignment = 'CENTER'
         row.label(text="OPTIONAL HELPERS:", icon='OUTLINER_DATA_ARMATURE')
+
+        col = box.column()
+        col.operator("ambf.ambf_select_all")
 
         col = box.column()
         col.alignment = 'CENTER'
@@ -4179,6 +4267,7 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_OT_ambf_rigid_body_cleanup,
                   AMBF_OT_ambf_constraint_cleanup,
                   AMBF_OT_ambf_collision_shape_cleanup,
+                  AMBF_OT_select_all,
                   AMBF_OT_hide_passive_joints,
                   AMBF_OT_hide_all_joints,
                   AMBF_OT_remove_low_res_mesh_modifiers,
@@ -4210,7 +4299,8 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_PT_ambf_ghost_object,
                   AMBF_PT_ambf_constraint,
                   AMBF_OT_ambf_move_collision_mesh_to_body_origin,
-                  AMBF_OT_ambf_collision_mesh_use_current_location)
+                  AMBF_OT_ambf_collision_mesh_use_current_location
+)
 
 
 def register():
@@ -4229,6 +4319,10 @@ def register():
                 ('GHOST_OBJECT', 'GHOST_OBJECT', '', '', 2),
                 ('CONSTRAINT', 'CONSTRAINT', '', '', 3),
                 ('COLLISION_SHAPE', 'COLLISION_SHAPE', '', '', 4),
+                ('CAMERA', 'CAMERA', '', '', 5),
+                ('LIGHT', 'LIGHT', '', '', 6), 
+                ('Sensor', 'Sensor', '', '', 7),
+                ('ACTUATOR', 'ACTUATOR', '', '', 8),
             ],
             default='NONE'
         )
@@ -4367,7 +4461,7 @@ def register():
             update=rigid_body_collision_type_update_cb,
             description='Choose between a singular or a compound collision that consists of multiple shapes'
         )
-
+    
     Object.ambf_use_separate_collision_mesh = BoolProperty(name='Use Separate Collision Mesh', default=False,
                                                            description='Use a separate mesh for collision')
 
@@ -4562,6 +4656,9 @@ def register():
             default='VELOCITY',
             description='The output of the controller fed to the simulation. Better to use (VELOCITY) with P <= 10, D <= 1'
         )
+    
+    Object.ambf_camera_fov = FloatProperty(name="FOV", default=60.0, min=0.0)
+    Object.ambf_camera_near = FloatProperty(name="Near", default=0.1, min=0.0)
 
     Scene.ambf_adf_path = StringProperty \
             (
@@ -4686,6 +4783,7 @@ def register():
 
     Object.ambf_collision_shape_prop_collection = CollectionProperty(type=AMBF_PG_CollisionShapePropGroup)
 
+
 def unregister():
     from bpy.utils import unregister_class    
     for cls in reversed(custom_classes):
@@ -4693,5 +4791,6 @@ def unregister():
 
 
 if __name__ == "__main__":
+    print("\n\n########## STARTING ##########")
     register()
     #unregister()
