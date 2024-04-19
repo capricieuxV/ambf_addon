@@ -1,6 +1,47 @@
 import bpy
 
 '''
+WORKSPACE OPERATIONS
+'''
+class CleanWorkspace(bpy.types.Operator):
+    """Clean all objects not in any scene"""
+    bl_idname = "object.clean_workspace"
+    bl_label = "Clean Workspace"
+
+    def execute(self, context):
+        # Get all objects that are part of the current scene
+        scene_objects = set(context.scene.objects)
+        # Get all objects in the data
+        all_objects = set(bpy.data.objects)
+        # Calculate the difference
+        orphan_objects = all_objects - scene_objects
+
+        # Remove objects that are not part of any scene
+        for obj in orphan_objects:
+            # Data-blocks users counter doesn't update in the undo/redo stack, hence obj.users > 0 condition is added
+            if obj.users == 0:
+                bpy.data.objects.remove(obj, do_unlink=True)
+
+        return {'FINISHED'}
+
+class OBJECT_PT_Workspace_Main_Panel(bpy.types.Panel):
+    """Panel for Workspace Operations"""
+    bl_label = "Workspace Operations"
+    bl_idname = "OBJECT_PT_workspace_main_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Helper"
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Perform Workspace Operations Here")
+
+        col = layout.column()
+        col.separator()
+        col.operator("object.clean_workspace", text="Clean Workspace")
+
+
+'''
 GEOMETRY OPERATIONS
 '''
 class OBJECT_PT_Geometry_Main_Panel(bpy.types.Panel):
@@ -119,22 +160,26 @@ def register():
     print("\nStart Helper Panel...")
     bpy.utils.register_class(OBJECT_PT_Geometry_Main_Panel)
     bpy.utils.register_class(OBJECT_PT_Camera_Panel)
+    bpy.utils.register_class(OBJECT_PT_Workspace_Main_Panel)
     bpy.utils.register_class(AddCube)
     bpy.utils.register_class(AddSphere)
     bpy.utils.register_class(AddCylinder)
     bpy.utils.register_class(DeleteAllObjects)
     bpy.utils.register_class(DeleteSelectedObjects)
     bpy.utils.register_class(SetActiveCamera)
+    bpy.utils.register_class(CleanWorkspace)
 
 def unregister():
     bpy.utils.unregister_class(OBJECT_PT_Geometry_Main_Panel)
     bpy.utils.unregister_class(OBJECT_PT_Camera_Panel)
+    bpy.utils.unregister_class(OBJECT_PT_Workspace_Main_Panel)
     bpy.utils.unregister_class(AddCube)
     bpy.utils.unregister_class(AddSphere)
     bpy.utils.unregister_class(AddCylinder)
     bpy.utils.unregister_class(DeleteAllObjects)
     bpy.utils.unregister_class(DeleteSelectedObjects)
     bpy.utils.register_class(SetActiveCamera)
+    bpy.utils.unregister_class(CleanWorkspace)
 
 if __name__ == "__main__":
     register()

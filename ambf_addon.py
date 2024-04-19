@@ -95,7 +95,7 @@ class JointTemplate:
 class CameraTemplate:
     def __init__(self):
         self._adf_data = OrderedDict()
-        self.adf_data['namespace'] = ''
+        self._adf_data['namespace'] = ''
         self._adf_data['name'] = ''
         self._adf_data['location'] = get_pose_ordered_dict()
         self._adf_data['look at'] = get_pose_ordered_dict()
@@ -338,7 +338,7 @@ def set_global_namespace(context, namespace):
     context.scene.ambf_namespace = CommonConfig.namespace
 
 def get_namespace(fullname):
-    print("Handling get_namespace...")
+    # print("Handling get_namespace...")
     last_occurance = fullname.rfind('/')
     _namespace = ''
     if last_occurance >= 0:
@@ -361,7 +361,7 @@ def replace_dot_from_object_names(char_subs ='_'):
         obj_handle.name = obj_handle.name.replace('.', char_subs)
 
 def compare_namespace_with_global(fullname):
-    print("Handling compare_namespace_with_global...")
+    # print("Handling compare_namespace_with_global...")
     last_occurance = fullname.rfind('/')
     _is_namespace_same = False
     _namespace = ''
@@ -382,8 +382,8 @@ def compare_namespace_with_global(fullname):
         # The object's name does not contain and namespace
         _is_namespace_same = False
 
-    print("FULLNAME: %s, OBJ: %s, NAMESPACE: %s NAMESPACE_MATCHED: %d" %
-    (fullname, _name, _namespace, _is_namespace_same))
+    # print("FULLNAME: %s, OBJ: %s, NAMESPACE: %s NAMESPACE_MATCHED: %d" %
+    # (fullname, _name, _namespace, _is_namespace_same))
     return _is_namespace_same
 
 
@@ -394,7 +394,7 @@ def add_namespace_prefix(name):
 def get_grand_parent(body):
     grand_parent = body
     while grand_parent.parent is not None:
-        print('GRAND PARENT: ', grand_parent.name)
+        # print('GRAND PARENT: ', grand_parent.name)
         grand_parent = grand_parent.parent
     return grand_parent
 
@@ -420,16 +420,18 @@ def populate_heirarchial_tree():
     _heirarchial_bodies_list = []
 
     for obj_handle in bpy.data.objects:
-        print('ADDING OBJ: ', obj_handle.name, 'TO HEIRARCHIAL LIST')
+        # print('ADDING OBJ: ', obj_handle.name, 'TO HEIRARCHIAL LIST')
         _added_bodies_list[obj_handle] = False
+
+    for body in _heirarchial_bodies_list:
+            print(body.name, "--->",)
 
     for obj_handle in bpy.data.objects:
         grand_parent = get_grand_parent(obj_handle)
-        print('CALLING DOWNWARD TREE PASS FOR: ', grand_parent.name)
+        # print('CALLING DOWNWARD TREE PASS FOR: ', grand_parent.name)
         downward_tree_pass(grand_parent, _heirarchial_bodies_list, _added_bodies_list)
 
-    for body in _heirarchial_bodies_list:
-        print(body.name, "--->",)
+    
 
     return _heirarchial_bodies_list
 
@@ -450,13 +452,13 @@ def select_object(obj_handle, select=True):
 
 
 def select_objects(obj_handles, select=True):
-    print('SELECTING OBJECTS: ', len(obj_handles))
+    # print('SELECTING OBJECTS: ', len(obj_handles))
     for obj_handle in obj_handles:
         select_object(obj_handle, select)
 
 
 def select_all_objects(select):
-    print('SELECTING ALL OBJECTS: ', len(bpy.data.objects))
+    # print('SELECTING ALL OBJECTS: ', len(bpy.data.objects))
     # First deselect all objects
     for obj_handle in bpy.data.objects:
         select_object(obj_handle, select)
@@ -1242,12 +1244,17 @@ class AMBF_OT_generate_ambf_file(Operator):
         self._body_names_list = []
         self._joint_names_list = []
         self._camera_names_list = []
+        self._light_names_list = []
+        self._sensor_names_list = []
+        self._actuator_names_list = []
+
         self.body_name_prefix = 'BODY '
         self.joint_name_prefix = 'JOINT '
-        self.camera_name_prefix = 'CAMERA '
-        self.light_name_prefix = 'LIGHT '
+        self.camera_name_prefix = ''
+        self.light_name_prefix = ''
         self.sensor_name_prefix = 'SENSOR '
         self.actuator_name_prefix = 'ACTUATOR '
+        
         self._adf = None
         self._context = None
 
@@ -1648,8 +1655,6 @@ class AMBF_OT_generate_ambf_file(Operator):
                 print("DOT(jnt_axis, pa_off_axis ", joint_axis.dot(joint_offset_axis_angle[0]))
                 print("JOINT OFFSET ANGLE ", joint_offset_axis_angle[1])
 
-
-
         joint_yaml_name = self.add_joint_prefix_str(joint_data['name'])
         adf_data[joint_yaml_name] = joint_data
         self._joint_names_list.append(joint_yaml_name)
@@ -1700,44 +1705,34 @@ class AMBF_OT_generate_ambf_file(Operator):
         if camera_obj_handle.ambf_object_type != 'CAMERA':
             return
         
-        # # The object is unlinked from the scene. Don't write it
-        # if self._context.scene.objects.get(camera_obj_handle.name) is None:
-        #     return
+        # The object is unlinked from the scene. Don't write it
+        if self._context.scene.objects.get(camera_obj_handle.name) is None:
+            return
 
-        # if is_object_hidden(camera_obj_handle) is True:
-        #     return
+        if is_object_hidden(camera_obj_handle) is True:
+            return
 
-        # camera_template = CameraTemplate()
-        # camera_data = camera_template._adf_data
+        camera_template = CameraTemplate()
+        camera_data = camera_template._adf_data
 
-        # if not compare_namespace_with_global(camera_obj_handle.name):
-        #     if get_namespace(camera_obj_handle.name) != '':
-        #         camera_data['namespace'] = get_namespace(camera_obj_handle.name)
+        if not compare_namespace_with_global(camera_obj_handle.name):
+            if get_namespace(camera_obj_handle.name) != '':
+                camera_data['namespace'] = get_namespace(camera_obj_handle.name)
+        
+        camera_obj_handle_name = remove_namespace_prefix(camera_obj_handle.name)
+        camera_data['name'] = camera_obj_handle_name
 
-        # camera_obj_handle_name = remove_namespace_prefix(camera_obj_handle.name)
-        # print("CAMERA NAME: ", camera_obj_handle_name)        
-        # camera_data['name'] = camera_obj_handle_name
-
-        # # Get camera properties
-        # camera_data['fov'] = camera_obj_handle.data.angle
-        # camera_data['near_clip'] = camera_obj_handle.data.clip_start
-        # camera_data['far_clip'] = camera_obj_handle.data.clip_end
-
-        # # Get camera position and orientation
+        # Get camera properties
         world_pos = camera_obj_handle.matrix_world.translation
-        # world_rot = camera_obj_handle.matrix_world.to_euler()
-        # camera_pos = camera_data['location']['position']
-        # camera_rot = camera_data['location']['orientation']
-        # camera_pos['x'] = ambf_round(world_pos.x)
-        # camera_pos['y'] = ambf_round(world_pos.y)
-        # camera_pos['z'] = ambf_round(world_pos.z)
-        # camera_rot['r'] = ambf_round(world_rot[0])
-        # camera_rot['p'] = ambf_round(world_rot[1])
-        # camera_rot['y'] = ambf_round(world_rot[2])
+        world_rot = camera_obj_handle.matrix_world.to_euler()
 
-        # camera_yaml_name = self.add_body_prefix_str(camera_data['name'])
-        # adf_data[camera_yaml_name] = camera_data
-        # self.camera_name_prefix.append(camera_yaml_name)
+        camera_data['location'] = {"x": ambf_round(world_pos.x), "y": ambf_round(world_pos.y), "z": ambf_round(world_pos.z)}
+        camera_data['look at'] = {"x": 0.0, "y": 0.0, "z": 0.0}
+        camera_data['up'] = {"x": 0.0, "y": 0.0, "z": 1.0}
+        
+        camera_yaml_name = self.add_body_prefix_str(camera_data['name'])
+        adf_data[camera_yaml_name] = camera_data
+        self.camera_name_prefix.append(camera_yaml_name)
 
     # def generate_light_data_from_ambf_light(self, adf_data, light_obj_handle):
     #     if light_obj_handle.ambf_object_type != 'LIGHT':
@@ -1956,8 +1951,12 @@ class AMBF_OT_generate_ambf_file(Operator):
 
     def generate_adf(self):
         print('\n######### GENERATE ADF #########')
-        num_objs = len(bpy.data.objects)
-        print('Number of objects in the scene: ', num_objs)
+        # num_objs = len(bpy.context.scene.objects)
+        # print('Number of objects in the scene: ', num_objs)
+
+        num_objs_unhidden = len([obj for obj in bpy.context.scene.objects if not obj.hide_get()])
+        print('Number of unhidden objects in the scene: ', num_objs_unhidden)
+
         save_to = bpy.path.abspath(self._context.scene.ambf_adf_path)
         filename = os.path.basename(save_to)
         save_dir = os.path.dirname(save_to)
@@ -1980,8 +1979,6 @@ class AMBF_OT_generate_ambf_file(Operator):
         self._adf['sensors'] = []
         self._adf['actuators'] = []
 
-        print('SAVE PATH', bpy.path.abspath(save_dir))
-        print('AMBF CONFIG PATH', bpy.path.abspath(self._context.scene.ambf_meshes_path))
         rel_mesh_path = os.path.relpath(bpy.path.abspath(self._context.scene.ambf_meshes_path), bpy.path.abspath(save_dir))
 
         self._adf['high resolution path'] = rel_mesh_path + '/high_res/'
@@ -2011,12 +2008,12 @@ class AMBF_OT_generate_ambf_file(Operator):
         for obj_handle in _heirarichal_objects_list:
             self.generate_body_data_from_ambf_rigid_body(self._adf, obj_handle)
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
-            # self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
+            self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
 
         # Now populate the bodies and joints tag
         self._adf['bodies'] = self._body_names_list
         self._adf['joints'] = self._joint_names_list
-        self._adf['cameras'] = self.camera_name_prefix 
+        self._adf['cameras'] = self._camera_names_list
         
         yaml.dump(self._adf, output_file)
 
@@ -2546,6 +2543,7 @@ class AMBF_OT_load_ambf_file(Operator):
 
         # Create a new object with the camera data
         camera_object = bpy.data.objects.new(camera_name, camera)
+        camera_object.ambf_object_type = 'CAMERA'
         camera_object.matrix_world.translation = mathutils.Vector((camera_data['location']['x'], camera_data['location']['y'], camera_data['location']['z']))
         
         # Point the camera by setting its rotation
@@ -3207,7 +3205,7 @@ class AMBF_OT_load_ambf_file(Operator):
     def execute(self, context):
         self._yaml_filepath = str(bpy.path.abspath(context.scene['ambf_load_adf_filepath']))
         set_view_transform_orientation_to_local()
-        print(self._yaml_filepath)
+        print('Loading ADF File: ', self._yaml_filepath)
         yaml_file = open(self._yaml_filepath)
         
         # Check YAML version
