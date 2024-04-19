@@ -1,0 +1,19 @@
+bodies: []
+joints: []
+sensors: [SENSOR]
+actuators: [ACTUATOR Actuator0]
+
+ignore inter-collision: true
+namespace: /ambf/env/
+publish children names: true
+gravity: {x: 0.0, y: 0.0, z: 0.0}
+
+ACTUATOR Actuator0:
+  name: Actuator0
+  type: Constraint
+  location:
+    orientation: {r: 0.0, p: -3.14, y: 0.0}
+    position: {x: 0.6655727028846741, y: 1.3673123121261597, z: 0.2715485692024231}
+  parent: 
+  visible: True
+  visible size: 1

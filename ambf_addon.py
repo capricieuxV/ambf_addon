@@ -95,8 +95,8 @@ class JointTemplate:
 class CameraTemplate:
     def __init__(self):
         self._adf_data = OrderedDict()
+        self.adf_data['namespace'] = ''
         self._adf_data['name'] = ''
-        self._adf_data['parent'] = ''
         self._adf_data['location'] = get_pose_ordered_dict()
         self._adf_data['look at'] = get_pose_ordered_dict()
         self._adf_data['up'] = get_pose_ordered_dict()
@@ -105,15 +105,15 @@ class CameraTemplate:
         # self._adf_data['orthographic view width'] = 0.0
         # self._adf_data['stereo'] = {'mode': "", 'eye separation': 0.0, 'focal length': 0.0}
         # self._adf_data['controlling devices'] = []
-        # self._adf_data['monitor'] = 0
+        self._adf_data['monitor'] = 0 
         self._adf_data['visible'] = False
-        self._adf_data['publish image'] = False
-        self._adf_data['publish image interval'] = 0
-        self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
-        self._adf_data['publish depth'] = False
-        self._adf_data['publish depth interval'] = 0
-        self._adf_data['publish depth resolution'] = {'width': 0.0, 'height': 0.0}
-        self._adf_data['publish depth noise'] = {'enable': False, 'mean': 0.0, 'std_dev': 0.0, 'bias': 0.0}
+        # self._adf_data['publish image'] = False
+        # self._adf_data['publish image interval'] = 0
+        # self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
+        # self._adf_data['publish depth'] = False
+        # self._adf_data['publish depth interval'] = 0
+        # self._adf_data['publish depth resolution'] = {'width': 0.0, 'height': 0.0}
+        # self._adf_data['publish depth noise'] = {'mean': 0.0, 'std_dev': 0.0, 'bias': 0.0}
         # self._adf_data['preprocessing shaders'] = []
         # self._adf_data['depth compute shaders'] = []
         # self._adf_data['multipass'] = False
@@ -122,32 +122,35 @@ class CameraTemplate:
 class LightTemplate:
     def __init__(self):
         self._adf_data = OrderedDict()
+        self.adf_data['namespace'] = ''
         self._adf_data['name'] = ''
-        self._adf_data['parent'] = ''
         self._adf_data['location'] = get_pose_ordered_dict()
-        self._adf_data['color'] = get_xyz_ordered_dict()
-        self._adf_data['intensity'] = 0.0
-        self._adf_data['type'] = 'POINT'
-        self._adf_data['spot'] = {'angle': 0.0, 'blend': 0.0}
+        # self._adf_data['color'] = ''
+        # self._adf_data['intensity'] = 0.0 
+        # self._adf_data['type'] = 'POINT'
+        # self._adf_data['spot'] = {'angle': 0.0, 'blend': 0.0}
         self._adf_data['direction'] = get_xyz_ordered_dict()
-        self._adf_data['distance'] = 0.0
-        self._adf_data['decay'] = 0.0
-        self._adf_data['shadow'] = {'enable': False, 'bias': 0.0, 'radius': 0.0, 'map size': 0.0, 'map resolution': 0.0}
+        # self._adf_data['distance'] = 0.0
+        # self._adf_data['decay'] = 0.0
+        self._adf_data['spot exponent'] = 0.0
+        self._adf_data['shadow quality'] = 0.0
+        self._adf_data['cutoff angle'] = 0.0
         self._adf_data['visible'] = False
-        self._adf_data['publish image'] = False
-        self._adf_data['publish image interval'] = 0
-        self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
-        self._adf_data['publish depth'] = False
-        self._adf_data['publish depth interval'] = 0
-        self._adf_data['publish depth resolution'] = {'width': 0.0, 'height': 0.0}
-        self._adf_data['publish depth noise'] = {'enable': False, 'mean': 0.0, 'std_dev': 0.0, 'bias': 0.0}
+        self._adf_data['parent'] = ''
+        # self._adf_data['publish image'] = False
+        # self._adf_data['publish image interval'] = 0
+        # self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
+        # self._adf_data['publish depth'] = False
+        # self._adf_data['publish depth interval'] = 0
+        # self._adf_data['publish depth resolution'] = {'width': 0.0, 'height': 0.0}
+        # self._adf_data['publish depth noise'] = {'enable': False, 'mean': 0.0, 'std_dev': 0.0, 'bias': 0.0}
 
 class SensorTemplate:
     def __init__(self):
         self.adf_data = OrderedDict()
         self.adf_data['name'] = ''
         self.adf_data['namespace'] = ''
-        self.adf_data['type'] = ''
+        self.adf_data['type'] = 'Proximity'
         self.adf_data['parent'] = ''
         self.adf_data['location'] = get_pose_ordered_dict
         self.adf_data['location']['position'] = get_xyz_ordered_dict()
@@ -159,12 +162,17 @@ class ActuatorTemplate:
         self.adf_data = OrderedDict()
         self.adf_data['name'] = ''
         self.adf_data['namespace'] = ''
-        self.adf_data['type'] = ''
+        self.adf_data['type'] = 'Constriant'
         self.adf_data['parent'] = ''
         self.adf_data['location'] = get_pose_ordered_dict
         self.adf_data['location']['position'] = get_xyz_ordered_dict()
         self.adf_data['location']['orientation'] = get_rpy_ordered_dict()
-        self.adf_data['publish frequency'] = 0.0
+        self.adf_data['parent'] = ''
+        self.adf_data['visible'] = False
+        self.adf_data['visible size'] = 0.0
+        # self.adf_data['publish frequency'] = 0.0
+        # self.adf_data['max impulse'] = 0.0
+        # self.adf_data['tau'] = 0.0
         
 
 # Global Variables
@@ -176,6 +184,10 @@ class CommonConfig:
     # them into consideration before re saving the AMBF File so we don't reset those values
     loaded_body_map = {}
     loaded_joint_map = {}
+    loaded_camera_map = {}
+    loaded_light_map = {}
+    loaded_sensor_map = {}
+    loaded_actuator_map = {}
     collision_shape_material = None
     collision_shape_material_name = 'collision_shape_material'
     collision_shape_material_color = mathutils.Vector((0.8, 0.775, 0.0, 0.4)) # Pick a random color
@@ -343,7 +355,6 @@ def remove_namespace_prefix(full_name):
         # Body name doesn't have a namespace
         _name = full_name
     return _name
-
 
 def replace_dot_from_object_names(char_subs ='_'):
     for obj_handle in bpy.data.objects:
@@ -1643,6 +1654,47 @@ class AMBF_OT_generate_ambf_file(Operator):
         adf_data[joint_yaml_name] = joint_data
         self._joint_names_list.append(joint_yaml_name)
     
+    def generate_actuator_data_from_ambf_constriant(self, adf_data, actuator_obj_handle):
+        print("\nIn generate_actuator_data_from_ambf_constriant")
+        if actuator_obj_handle.ambf_object_type != 'ACTUATOR':
+            return
+
+        # The object is unlinked from the scene. Don't write it
+        if self._context.scene.objects.get(actuator_obj_handle.name) is None:
+            return
+        
+        if is_object_hidden(actuator_obj_handle) is True:
+            return
+        
+        actuator = ActuatorTemplate()
+        actuator_data = actuator._adf_data
+
+        if not compare_namespace_with_global(actuator_obj_handle.name):
+            if get_namespace(actuator_obj_handle.name) != '':
+                actuator_obj_handle['namespace'] = get_namespace(actuator_obj_handle.name)
+        
+        actuator_data = {}
+        actuator_obj_handle_name = remove_namespace_prefix(actuator_obj_handle.name)
+        actuarator_yaml_name = self.add_actuator_prefix_str(actuator_obj_handle_name)
+        actuator_data['name'] = actuator_obj_handle_name
+        actuator_data['type'] = actuator_obj_handle.type
+        actuator_data['location']['position'] = {}
+
+        parent_obj_handle = actuator_obj_handle.ambf_object_parent
+        parent_obj_handle_name = remove_namespace_prefix(parent_obj_handle.name)
+        actuator_data['parent'] = self.add_body_prefix_str(parent_obj_handle_name)
+        actuator_data['visible'] = actuator_obj_handle.ambf_object_visible
+        actuator_data['visible size'] = actuator_obj_handle.ambf_object_visible_size
+
+        world_pos = actuator_obj_handle.matrix_world.translation
+        world_rot = actuator_obj_handle.matrix_world.to_euler()
+        actuator_data['location']['position']['x'] = ambf_round(world_pos.x)
+        actuator_data['location']['position']['y'] = ambf_round(world_pos.y)
+        actuator_data['location']['position']['z'] = ambf_round(world_pos.z)
+        actuator_data['location']['orientation']['r'] = ambf_round(world_rot[0])
+        actuator_data['location']['orientation']['p'] = ambf_round(world_rot[1])
+        actuator_data['location']['orientation']['y'] = ambf_round(world_rot[2])
+        
     def generate_camera_data_from_ambf_camera(self, adf_data, camera_obj_handle):
         # print("\nCAMERA NAME: ", camera_obj_handle.name)
         if camera_obj_handle.ambf_object_type != 'CAMERA':
@@ -1959,7 +2011,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         for obj_handle in _heirarichal_objects_list:
             self.generate_body_data_from_ambf_rigid_body(self._adf, obj_handle)
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
-            self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
+            # self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
 
         # Now populate the bodies and joints tag
         self._adf['bodies'] = self._body_names_list
@@ -2167,33 +2219,35 @@ class AMBF_OT_create_joint(Operator):
         bpy.ops.object.empty_add(type='PLAIN_AXES')
         active_obj_handle = get_active_object()
         active_obj_handle.name = 'joint'
-        return {'FINISHED'}
+        return {'FINISHED CREATING JOINT'}
     
-class OBJECT_PT_DebuggerPanel(bpy.types.Panel):
-    """Creates a Panel in the Object properties window"""
-    bl_label = "Debugger Panel"
-    bl_idname = "OBJECT_PT_debugger"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "object"
+class AMBF_OT_create_sensor(Operator):
+    bl_idname = "ambf.create_sensor"
+    bl_label = "Create Sensor"
+    bl_description = "This creates an empty object that can be used to create closed loop mechanisms. Make" \
+                     " sure to set the rigid body constraint (RBC) for this empty mesh and ideally parent this empty" \
+                     " object with the parent body of its RBC"
 
-    def draw(self, context):
-        layout = self.layout
-        obj = context.object
+    def execute(self, context):
+        select_all_objects(False)
+        bpy.ops.object.empty_add(type='SPHERE')
+        active_obj_handle = get_active_object()
+        active_obj_handle.name = 'sensor'
+        return {'FINISHED CREATING ACTUATOR'}
+    
+class AMBF_OT_create_actuator(Operator):
+    bl_idname = "ambf.create_actuator"
+    bl_label = "Create Actuator"
+    bl_description = "This creates an empty object that can be used to create closed loop mechanisms. Make" \
+                     " sure to set the rigid body constraint (RBC) for this empty mesh and ideally parent this empty" \
+                     " object with the parent body of its RBC"
 
-        if obj:
-            # Display the name and type of the current object
-            row = layout.row()
-            row.label(text="Active Object:", icon='OBJECT_DATA')
-            
-            row = layout.row()
-            row.label(text="Name: " + obj.name)
-
-            row = layout.row()
-            row.label(text="Type: " + obj.type)
-        else:
-            row = layout.row()
-            row.label(text="No active object")
+    def execute(self, context):
+        select_all_objects(False)
+        bpy.ops.object.empty_add(type='SPHERE')
+        active_obj_handle = get_active_object()
+        active_obj_handle.name = 'actuator'
+        return {'FINISHED CREATING ACTUATOR'}
 
 
 class AMBF_OT_remove_low_res_mesh_modifiers(Operator):
@@ -2421,6 +2475,7 @@ class AMBF_OT_load_ambf_file(Operator):
         # A dict for body name as defined in YAML File and the Name Blender gives
         # the body
         self._blender_remapped_body_names = {}
+        self.loaded_cameras = {}
         self._high_res_path = ''
         self._low_res_path = ''
         self._context = None
@@ -2479,6 +2534,39 @@ class AMBF_OT_load_ambf_file(Operator):
         if coll_mesh_obj:
             make_obj1_parent_of_obj2(mesh_obj, coll_mesh_obj)
         return mesh_obj
+
+    def load_ambf_camera(self, camera_data):
+        camera_name = camera_data['name']
+        
+        # Create a new camera data block
+        camera = bpy.data.cameras.new(name=camera_name)
+        camera.angle = camera_data['field view angle']
+        camera.clip_start = camera_data['clipping plane']['near']
+        camera.clip_end = camera_data['clipping plane']['far']
+
+        # Create a new object with the camera data
+        camera_object = bpy.data.objects.new(camera_name, camera)
+        camera_object.matrix_world.translation = mathutils.Vector((camera_data['location']['x'], camera_data['location']['y'], camera_data['location']['z']))
+        
+        # Point the camera by setting its rotation
+        look_at = mathutils.Vector((camera_data['look at']['x'], camera_data['look at']['y'], camera_data['look at']['z']))
+        up = mathutils.Vector((camera_data['up']['x'], camera_data['up']['y'], camera_data['up']['z']))
+
+        forward = (look_at - camera_object.matrix_world.translation).normalized()
+        right = up.cross(forward).normalized()
+        up = forward.cross(right)
+
+        rotation_matrix = mathutils.Matrix((right, up, forward)).transposed()
+        camera_object.rotation_euler = rotation_matrix.to_euler()
+
+        # Link the camera object to the current scene
+        scene = bpy.context.scene
+        scene.collection.objects.link(camera_object)
+        
+        # Set the camera as the active camera for the scene
+        scene.camera = camera_object
+
+        return camera_object
 
     def load_material(self, body_data, obj_handle):
 
@@ -2700,26 +2788,8 @@ class AMBF_OT_load_ambf_file(Operator):
             _body_namespace = adf_data['namespace']
             obj_handle.name = _body_namespace + af_name
         else:
-            obj_handle.name = add_namespace_prefix(af_name)
-    
-    def load_camera_location(self, camera_data, obj_handle):
-        bpy.ops.object.transform_apply(scale=True)
-
-        camera_location_xyz = {'x': 0, 'y': 0, 'z': 0}
-        camera_location_rpy = {'r': 0, 'p': 0, 'y': 0}
-
-        if 'location' in camera_data:
-            if 'position' in camera_data['location']:
-                camera_location_xyz = camera_data['location']['position']
-            if 'orientation' in camera_data['location']:
-                camera_location_rpy = camera_data['location']['orientation']
-
-        obj_handle.location[0] = camera_location_xyz['x']
-        obj_handle.location[1] = camera_location_xyz['y']
-        obj_handle.location[2] = camera_location_xyz['z']
-        obj_handle.rotation_euler = (camera_location_rpy['r'],
-                                    camera_location_rpy['p'],
-                                    camera_location_rpy['y'])
+            obj_handle.name = add_namespace_prefix(af_name)        
+        
 
     def load_body_location(self, body_data, obj_handle):
 
@@ -2772,6 +2842,11 @@ class AMBF_OT_load_ambf_file(Operator):
 
         self._blender_remapped_body_names[ghost_name] = obj_handle.name
         CommonConfig.loaded_body_map[obj_handle] = ghost_data
+
+    def load_camera(self, camera_name):
+        camera_data = self._adf_data[camera_name]
+        cam_handle = self.load_ambf_camera(camera_data)
+        CommonConfig.loaded_camera_map[cam_handle] = camera_data
     
     def load_sensor(self, sensor_name):
         sensor_data = self._adf_data[sensor_name]
@@ -2781,8 +2856,6 @@ class AMBF_OT_load_ambf_file(Operator):
         self.load_object_name(sensor_data, obj_handle)
 
         self.load_body_location(sensor_data, obj_handle)
-
-        self.load_material(sensor_data, obj_handle)
 
         self._blender_remapped_body_names[sensor_name] = obj_handle.name
         CommonConfig.loaded_body_map[obj_handle] = sensor_data
@@ -3156,6 +3229,16 @@ class AMBF_OT_load_ambf_file(Operator):
             joints_list = self._adf_data['joints']
         except:
             joints_list = []
+        
+        try:
+            camera_list = self._adf_data['cameras']
+        except:
+            camera_list = []
+
+        try:
+            lighting_list = self._adf_data['lights']
+        except:
+            lighting_list = []
 
         try:
             sensors_list = self._adf_data['sensors']
@@ -3166,6 +3249,11 @@ class AMBF_OT_load_ambf_file(Operator):
             sensors_list = self._adf_data['actuators']
         except:
             sensors_list = []
+        
+        try:
+            actuarators_list = self._adf_data['actuators']
+        except:
+            actuarators_list = []
 
         if 'namespace' in self._adf_data:
             set_global_namespace(context, self._adf_data['namespace'])
@@ -3191,6 +3279,18 @@ class AMBF_OT_load_ambf_file(Operator):
 
         for joint_name in joints_list:
             self.load_ambf_joint(joint_name)
+
+        for camera_name in camera_list:
+            self.load_camera(camera_name)
+        
+        # for light_name in lighting_list:
+        #     self.load_light(light_name)
+        
+        # for sensor_name in sensors_list:
+        #     self.load_sensor(sensor_name)
+        
+        # for actuator_name in actuators_list:
+        #     self.load_actuator(actuator_name)
 
         # Set the model ignore collision flag
         try:
@@ -3221,7 +3321,7 @@ class AMBF_OT_cleanup_all(Operator):
         for o in bpy.data.objects:
             bpy.data.objects.remove(o)
         return {'FINISHED'}
-    
+
 
 class AMBF_OT_select_all(Operator):
     """Add Rigid Body Properties"""
@@ -3401,6 +3501,31 @@ class AMBF_OT_ambf_collision_mesh_use_current_location(Operator):
             collision_mesh_obj.data.vertices.data.transform(T_c_rb)
         return {'FINISHED'}
 
+class OBJECT_PT_DebuggerPanel(bpy.types.Panel):
+    """Creates a Panel in the Object properties window"""
+    bl_label = "Debugger Panel"
+    bl_idname = "OBJECT_PT_debugger"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "object"
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+
+        if obj:
+            # Display the name and type of the current object
+            row = layout.row()
+            row.label(text="Active Object:", icon='OBJECT_DATA')
+            
+            row = layout.row()
+            row.label(text="Name: " + obj.name)
+
+            row = layout.row()
+            row.label(text="Type: " + obj.type)
+        else:
+            row = layout.row()
+            row.label(text="No active object")
 
 class AMBF_PT_main_panel(Panel):
     """Creates a Panel in the Tool Shelf"""
@@ -3620,7 +3745,14 @@ class AMBF_PT_main_panel(Panel):
         row = box.row()
         row.scale_y = 1.5
         row.operator("ambf.create_joint")
-        
+
+        row = box.row()
+        row.scale_y = 1.5
+        row.operator("ambf.create_sensor")
+
+        row = box.row()
+        row.scale_y = 1.5
+        row.operator("ambf.create_actuator")
         
         ### SEPERATOR
         layout.separator()
@@ -3965,10 +4097,9 @@ class AMBF_PT_ambf_ghost_object(Panel):
 
             col = box.column()
             col.prop(context.object, 'ambf_rigid_body_passive')
-    
 
 class AMBF_PT_ambf_constraint(Panel):
-    """Add Rigid Body Properties"""
+    """Add Body Properties"""
     bl_label = "AMBF CONSTRAINT PROPERTIES"
     bl_idname = "AMBF_PT_ambf_constraint"
     bl_space_type = 'PROPERTIES'
@@ -4002,7 +4133,7 @@ class AMBF_PT_ambf_constraint(Panel):
             col = layout.column()
             col.alignment = 'CENTER'
             col.prop(context.object, 'ambf_constraint_name')
-            
+
             col = layout.column()
             col.prop(context.object, 'ambf_constraint_type')
             
@@ -4112,6 +4243,7 @@ class AMBF_PT_ambf_constraint(Panel):
                     col = layout.column()
                     col.scale_y = 2.0
                     col.prop(context.object, 'ambf_constraint_max_motor_impulse')
+
             elif context.object.ambf_constraint_type in ['CONE_TWIST']:
                 row = layout.row()
                 row.label(text="Limits")
@@ -4121,6 +4253,7 @@ class AMBF_PT_ambf_constraint(Panel):
                 row = layout.row()
                 row.prop(context.object, 'ambf_constraint_damping')
                 row.scale_y = 1.5
+
             elif context.object.ambf_constraint_type in ['SIX_DOF', 'SIX_DOF_SPRING']:
 
                 row = layout.row()
@@ -4172,7 +4305,10 @@ class AMBF_PT_ambf_constraint(Panel):
                     col.prop(context.object, 'ambf_constraint_six_dof_equilibrium_angular')
                     col = box.column()
                     col.prop(context.object, 'ambf_constraint_six_dof_equilibrium_linear')
-
+        else:
+            layout.separator()
+            col = layout.column()
+            
             layout.separator()
 
             col = layout.column()
@@ -4181,6 +4317,78 @@ class AMBF_PT_ambf_constraint(Panel):
             col = layout.column()
             col.prop(context.object, 'ambf_constraint_passive')
 
+class AMBF_PT_ambf_actuator(Panel):
+    """Add Actuator Properties"""
+    bl_label = "AMBF ACTUATOR PROPERTIES"
+    bl_idname = "AMBF_PT_ambf_actuator"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "physics"
+
+    @classmethod
+    def poll(self, context):
+        active = False
+        active_obj_handle = get_active_object()
+        if active_obj_handle: # Check if an obj_handle is active
+            if active_obj_handle.type in ['EMPTY']:
+                active = True          
+        return active
+    
+    def draw(self, context):
+        layout = self.layout
+        # Name property
+        row = layout.row()
+        row.prop(context.object, 'name')
+
+        # Parent property
+        row = layout.row()
+        row.prop(context.object, 'parent')
+
+        # Visible boolean property
+        row = layout.row()
+        row.prop(context.object, 'ambf_object_visible', toggle=False)
+
+        # Visible size property
+        row = layout.row()
+        row.alignment = 'EXPAND'
+        row.prop(context.object, 'ambf_object_visible_size')
+
+class AMBF_PT_ambf_sensor(Panel):
+    """Add Sensor Properties"""
+    bl_label = "AMBF SENSOR PROPERTIES"
+    bl_idname = "AMBF_PT_ambf_sensor"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "physics"
+
+    @classmethod
+    def poll(self, context):
+        active = False
+        active_obj_handle = get_active_object()
+        if active_obj_handle: # Check if an obj_handle is active
+            if active_obj_handle.type in ['EMPTY']:
+                active = True          
+        return active
+    
+    def draw(self, context):
+        layout = self.layout
+        # Name property
+        row = layout.row()
+        row.prop(context.object, 'name')
+
+        # Parent property
+        row = layout.row()
+        row.prop(context.object, 'parent')
+
+        # Visible boolean property
+        row = layout.row()
+        row.prop(context.object, 'ambf_object_visible', toggle=False)
+
+        # Visible size property
+        row = layout.row()
+        row.alignment = 'EXPAND'
+        row.prop(context.object, 'ambf_object_visible_size')
+        
 
 class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
     ambf_collision_shape_radius: FloatProperty \
@@ -4276,6 +4484,8 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_OT_save_meshes,
                   AMBF_OT_load_ambf_file,
                   AMBF_OT_create_joint,
+                  AMBF_OT_create_sensor,
+                  AMBF_OT_create_actuator,
                   AMBF_OT_remove_object_namespaces,
                   AMBF_OT_estimate_inertial_offsets,
                   AMBF_OT_estimate_shape_offsets,
@@ -4294,10 +4504,13 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_OT_ambf_rigid_body_activate,
                   AMBF_OT_ambf_ghost_object_activate,
                   AMBF_OT_ambf_constraint_activate,
+                  OBJECT_PT_DebuggerPanel,
                   AMBF_PT_main_panel,
                   AMBF_PT_ambf_rigid_body,
                   AMBF_PT_ambf_ghost_object,
                   AMBF_PT_ambf_constraint,
+                  AMBF_PT_ambf_actuator,
+                  AMBF_PT_ambf_sensor,
                   AMBF_OT_ambf_move_collision_mesh_to_body_origin,
                   AMBF_OT_ambf_collision_mesh_use_current_location
 )
@@ -4321,7 +4534,7 @@ def register():
                 ('COLLISION_SHAPE', 'COLLISION_SHAPE', '', '', 4),
                 ('CAMERA', 'CAMERA', '', '', 5),
                 ('LIGHT', 'LIGHT', '', '', 6), 
-                ('Sensor', 'Sensor', '', '', 7),
+                ('SENSOR', 'SENSOR', '', '', 7),
                 ('ACTUATOR', 'ACTUATOR', '', '', 8),
             ],
             default='NONE'
@@ -4441,6 +4654,8 @@ def register():
         )
 
     Object.ambf_object_visible = BoolProperty(name="Visible", default=True, description='Show this object in AMBF')
+    
+    Object.ambf_object_visible_size = FloatProperty(name="Visible Size", default=0.005, min=0.0)
 
     Object.ambf_collision_margin_enable = BoolProperty(name="Enable Collision Margin", default=False)
 

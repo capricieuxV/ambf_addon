@@ -1,15 +1,19 @@
 import bpy
 
-class GeometryCreationPanel(bpy.types.Panel):
-    """Creates a Panel in the scene context of the properties editor"""
-    bl_label = "Geometry Creation"
-    bl_idname = "GeometryCreationPanel"
+'''
+GEOMETRY OPERATIONS
+'''
+class OBJECT_PT_Geometry_Main_Panel(bpy.types.Panel):
+    """Panel for Geometry Operations"""
+    bl_label = "Geometry Operations"
+    bl_idname = "OBJECT_PT_geometry_main_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Helper"
     
     def draw(self, context):
         layout = self.layout
+        layout.label(text="Perform Geometry Operations Here")
 
         col = layout.column()
         col.operator("mesh.add_cube", text="Add Cube")
@@ -17,9 +21,15 @@ class GeometryCreationPanel(bpy.types.Panel):
         col.operator("mesh.add_cylinder", text="Add Cylinder")
 
         col = layout.column()
+        col.separator()
         col.operator("object.select_all", text="Select All").action = 'SELECT'
         col.operator("object.select_all", text="Deselect All").action = 'DESELECT'
+        
+        col = layout.column()
+        # add layout divider
+        col.separator()
         col.operator("object.delete_all_objects", text="Delete All")
+        col.operator("object.delete_selected_objects", text="Delete Selected")
 
 class AddCube(bpy.types.Operator):
     """Add a new cube to the scene"""
@@ -57,20 +67,74 @@ class DeleteAllObjects(bpy.types.Operator):
         bpy.ops.object.select_all(action='SELECT')
         bpy.ops.object.delete(use_global=False)
         return {'FINISHED'}
+    
+class DeleteSelectedObjects(bpy.types.Operator):
+    """Delete selected objects in the scene"""
+    bl_idname = "object.delete_selected_objects"
+    bl_label = "Delete Selected Objects"
+
+    def execute(self, context):
+        bpy.ops.object.delete(use_global=False)
+        return {'FINISHED'}
+
+'''
+CAMERA OPERATIONS
+'''
+class SetActiveCamera(bpy.types.Operator):
+    """Set a camera as the active camera"""
+    bl_idname = "scene.set_active_camera"
+    bl_label = "Set Active Camera"
+
+    camera_name: bpy.props.StringProperty() 
+
+    def execute(self, context):
+        camera = bpy.data.objects.get(self.camera_name)
+        if camera and camera.type == 'CAMERA':
+            context.scene.camera = camera
+            self.report({'INFO'}, f"Active camera set to: {camera.name}")
+        else:
+            self.report({'ERROR'}, "No camera found with the given name")
+        return {'FINISHED'}
+
+class OBJECT_PT_Camera_Panel(bpy.types.Panel):
+    """Panel for Camera Operations"""
+    bl_label = "Camera Operations"
+    bl_idname = "OBJECT_PT_camera_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Helper"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        layout.label(text="Set Active Camera")
+        # Iterate through all cameras in the scene and create a button for each
+        for obj in scene.objects:
+            if obj.type == 'CAMERA':
+                op = layout.operator("scene.set_active_camera", text=obj.name)
+                op.camera_name = obj.name  # Pass the camera name to the operator
 
 def register():
-    bpy.utils.register_class(GeometryCreationPanel)
+    print("\nStart Helper Panel...")
+    bpy.utils.register_class(OBJECT_PT_Geometry_Main_Panel)
+    bpy.utils.register_class(OBJECT_PT_Camera_Panel)
     bpy.utils.register_class(AddCube)
     bpy.utils.register_class(AddSphere)
     bpy.utils.register_class(AddCylinder)
     bpy.utils.register_class(DeleteAllObjects)
+    bpy.utils.register_class(DeleteSelectedObjects)
+    bpy.utils.register_class(SetActiveCamera)
 
 def unregister():
-    bpy.utils.unregister_class(GeometryCreationPanel)
+    bpy.utils.unregister_class(OBJECT_PT_Geometry_Main_Panel)
+    bpy.utils.unregister_class(OBJECT_PT_Camera_Panel)
     bpy.utils.unregister_class(AddCube)
     bpy.utils.unregister_class(AddSphere)
     bpy.utils.unregister_class(AddCylinder)
     bpy.utils.unregister_class(DeleteAllObjects)
+    bpy.utils.unregister_class(DeleteSelectedObjects)
+    bpy.utils.register_class(SetActiveCamera)
 
 if __name__ == "__main__":
     register()
