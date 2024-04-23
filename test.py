@@ -1,36 +1,24 @@
 import bpy
-import rospy
-from geometry_msgs.msg import PoseStamped
+import mathutils
 
-# Specify the name of the Blender object to track
-object_name = "Cube"
+# Assume camera_object is the camera object in Blender
+camera_object = bpy.context.active_object
 
-# ROS node and publisher setup
-rospy.init_node('blender_object_publisher')
-pub = rospy.Publisher('/blender_object_pose', PoseStamped, queue_size=10)
+# Get the rotation matrix from the camera's current rotation
+rot_mat = camera_object.matrix_world.to_3x3()
 
-def publish_object_pose():
-    # Get the specified object from the Blender scene
-    obj = bpy.data.objects[object_name]
+# Extract the camera's forward, right, and up vectors
+forward = -rot_mat.col[2].normalized()  # Negative Z-axis
+right = rot_mat.col[0].normalized()     # X-axis
+up = rot_mat.col[1].normalized()        # Y-axis
 
-    # Retrieve the object's position
-    position = obj.location
+# The camera's world location
+cam_location = camera_object.matrix_world.translation
 
-    # Create a PoseStamped message
-    pose_msg = PoseStamped()
-    pose_msg.header.stamp = rospy.Time.now()
-    pose_msg.header.frame_id = "blender"
-    pose_msg.pose.position.x = position.x
-    pose_msg.pose.position.y = position.y
-    pose_msg.pose.position.z = position.z
+# Calculate the look_at point
+up = right.cross(forward)
+look_at = cam_location + forward
 
-    # Publish the object's pose
-    pub.publish(pose_msg)
-
-if __name__ == '__main__':
-    try:
-        while not rospy.is_shutdown():
-            publish_object_pose()
-            rospy.Rate(10).sleep()  # Publish at 10 Hz
-    except rospy.ROSInterruptException:
-        pass
+print("Camera Location:", cam_location)
+print("Look At:", look_at)
+print("Up Direction:", up)

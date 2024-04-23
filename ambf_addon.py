@@ -1727,8 +1727,8 @@ class AMBF_OT_generate_ambf_file(Operator):
         world_rot = camera_obj_handle.matrix_world.to_euler()
 
         camera_data['location'] = {"x": ambf_round(world_pos.x), "y": ambf_round(world_pos.y), "z": ambf_round(world_pos.z)}
-        camera_data['look at'] = {"x": 0.0, "y": 0.0, "z": 0.0}
-        camera_data['up'] = {"x": 0.0, "y": 0.0, "z": 1.0}
+        camera_data['look at'] = {"x": 0.0, "y": 0.0, "z": 1.0}
+        camera_data['up'] = {"x": 0.0, "y": 1.0, "z": 1.0}
         
         camera_yaml_name = self.add_body_prefix_str(camera_data['name'])
         adf_data[camera_yaml_name] = camera_data
@@ -2550,7 +2550,7 @@ class AMBF_OT_load_ambf_file(Operator):
         look_at = mathutils.Vector((camera_data['look at']['x'], camera_data['look at']['y'], camera_data['look at']['z']))
         up = mathutils.Vector((camera_data['up']['x'], camera_data['up']['y'], camera_data['up']['z']))
 
-        forward = (look_at - camera_object.matrix_world.translation).normalized()
+        forward = -(look_at - camera_object.matrix_world.translation).normalized()
         right = up.cross(forward).normalized()
         up = forward.cross(right)
 
