@@ -56,6 +56,7 @@ class ServiceROS(bpy.types.Operator):
     def update_objects(self, context):
         obj_names = self._client.get_obj_names()
         print(f"Found {len(obj_names)} objects in AMBF")
+        obj_names = ["/ambf/env/base_link", "/ambf/env/yaw_link"]
         for ambf_name in obj_names:
             normalized_name = normalize_name(ambf_name.split('/')[-1])
             obj = find_object_by_normalized_name(normalized_name)
