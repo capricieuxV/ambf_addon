@@ -2008,7 +2008,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         for obj_handle in _heirarichal_objects_list:
             self.generate_body_data_from_ambf_rigid_body(self._adf, obj_handle)
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
-            self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
+            # self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
 
         # Now populate the bodies and joints tag
         self._adf['bodies'] = self._body_names_list
