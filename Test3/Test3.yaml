@@ -354,7 +354,7 @@ JOINT Base-Stand:
 camera:
   name: Camera
   location: {x: 2.61011, y: 0.700025, z: 1.13132}
-  look at: {x: 0.0, y: 0.0, z: -0.5}
+  look at: {x: 0.0, y: 0.7, z: -0.5}
   up: {x: 0.0, y: 0.0, z: 1.0}
   clipping plane: {near: 0.5, far: 10.0}
   field view angle: 1
