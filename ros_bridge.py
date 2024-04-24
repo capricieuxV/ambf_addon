@@ -1,39 +1,119 @@
 import bpy
-import rospy
-from geometry_msgs.msg import PoseStamped
+import mathutils
 
-# Specify the name of the Blender object to track
-object_name = []
-for collection in bpy.data.collections:
-    for obj in collection.all_objects:
-        object_name.append(obj.name)
+def normalize_name(name):
+    """Normalize names by removing spaces and converting to lower case."""
+    return name.replace(' ', '').lower()
 
-# ROS node and publisher setup
-rospy.init_node('blender_object_publisher')
-pub = rospy.Publisher('/blender_object_pose', PoseStamped, queue_size=10)
+def find_object_by_normalized_name(normalized_name):
+    """Find an object in all Blender objects by its normalized name."""
+    for obj in bpy.data.objects:
+        name = obj.name.split('/')[-1].replace(' ', '').lower()
+        if normalize_name(name) == normalized_name:
+            return obj
+    return None
 
-def publish_object_pose():
-    # Get the specified object from the Blender scene
-    obj = bpy.data.objects[object_name]
 
-    # Retrieve the object's position
-    position = obj.location
+class ServiceROS(bpy.types.Operator):
+    bl_idname = "wm.ros_service"
+    bl_label = "ROS Background Service"
+    _timer = None
+    _client = None
+    is_running = False
 
-    # Create a PoseStamped message
-    pose_msg = PoseStamped()
-    pose_msg.header.stamp = rospy.Time.now()
-    pose_msg.header.frame_id = "blender"
-    pose_msg.pose.position.x = position.x
-    pose_msg.pose.position.y = position.y
-    pose_msg.pose.position.z = position.z
+    def start_ambf_client(self):
+        from ambf_client import Client
+        self._client = Client()
+        self._client.connect()
+        print('--> Connected to AMBF Client')
 
-    # Publish the object's pose
-    pub.publish(pose_msg)
+    def modal(self, context, event):
+        if event.type == 'TIMER' and self.is_running:
+            self.update_objects(context)
+        if context.scene.stop_service:
+            return self.cancel(context)
+        return {'PASS_THROUGH'}
 
-if __name__ == '__main__':
-    try:
-        while not rospy.is_shutdown():
-            publish_object_pose()
-            rospy.Rate(10).sleep()  # Publish at 10 Hz
-    except rospy.ROSInterruptException:
-        pass
+    def execute(self, context):
+        if self.is_running:
+            self.report({'WARNING'}, "Service already running")
+            return {'CANCELLED'}
+        self.start_ambf_client()
+        self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        self.is_running = True
+        context.scene.stop_service = False
+        return {'RUNNING_MODAL'}
+    
+    def find_object_in_collections(object_name):
+        """Find an object by its name in all collections."""
+        for collection in bpy.data.collections:
+            for obj in collection.objects:
+                if obj.name == object_name:
+                    return obj
+        return None
+        
+    def update_objects(self, context):
+        obj_names = self._client.get_obj_names()
+        print(f"Found {len(obj_names)} objects in AMBF")
+        for ambf_name in obj_names:
+            normalized_name = normalize_name(ambf_name.split('/')[-1])
+            obj = find_object_by_normalized_name(normalized_name)
+            print(f"Found object {obj} for {ambf_name}")
+            handle = self._client.get_obj_handle(ambf_name)
+            if handle is not None and obj is not None:
+                pose = handle.get_pose()
+                obj.location = mathutils.Vector(pose[:3])
+                obj.rotation_euler = mathutils.Euler(pose[3:], 'XYZ')
+                print(f"Updated object {obj} with pose {pose}")
+            else:
+                print(f"Failed to get AMBF handle for {ambf_name}")
+
+    def cancel(self, context):
+        if self._timer:
+            context.window_manager.event_timer_remove(self._timer)
+        self.is_running = False
+        if self._client:
+            self._client.clean_up()
+        print("--> ROS Service Stopped")
+        return {'CANCELLED'}
+
+    def __del__(self):
+        self.cancel(bpy.context)
+
+class PT_ROS_Service_Panel(bpy.types.Panel):
+    bl_idname = "PT_ROS_Service_Panel"
+    bl_label = "ROS Background Service Panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ROS Service"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        col.label(text='ROS Service Control')
+        col.operator("wm.ros_service", text="Start ROS Service")
+        col.operator("wm.stop_ros_service", text="Stop ROS Service", icon='CANCEL')
+
+class StopServiceROS(bpy.types.Operator):
+    bl_idname = "wm.stop_ros_service"
+    bl_label = "Stop ROS Background Service"
+
+    def execute(self, context):
+        context.scene.stop_service = True
+        return {'FINISHED'}
+
+def register():
+    bpy.types.Scene.stop_service = bpy.props.BoolProperty(default=False)
+    bpy.utils.register_class(ServiceROS)
+    bpy.utils.register_class(StopServiceROS)
+    bpy.utils.register_class(PT_ROS_Service_Panel)
+
+def unregister():
+    bpy.utils.unregister_class(ServiceROS)
+    bpy.utils.unregister_class(StopServiceROS)
+    bpy.utils.unregister_class(PT_ROS_Service_Panel)
+    del bpy.types.Scene.stop_service
+
+if __name__ == "__main__":
+    register()
