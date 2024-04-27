@@ -173,7 +173,20 @@ class ActuatorTemplate:
         # self.adf_data['publish frequency'] = 0.0
         # self.adf_data['max impulse'] = 0.0
         # self.adf_data['tau'] = 0.0
-        
+
+class SoftBodyTemplate:
+    def __init__(self):
+        self.adf_data = OrderedDict()
+        self.adf_data['name'] = ''
+        self.adf_data['namespace'] = ''
+        self.adf_data['type'] = 'Cloth'
+        self.adf_data['parent'] = ''
+        self.adf_data['location'] = get_pose_ordered_dict
+        self.adf_data['location']['position'] = get_xyz_ordered_dict()
+        self.adf_data['location']['orientation'] = get_rpy_ordered_dict()
+        self.adf_data['visible'] = False
+        self.adf_data['visible size'] = 0.0
+
 
 # Global Variables
 class CommonConfig:
@@ -207,7 +220,8 @@ def setup_yaml():
 
 
 def set_view_transform_orientation_to_local():
-    bpy.context.scene.transform_orientation_slots[0].type = 'LOCAL'
+    # bpy.context.scene.transform_orientation_slots[0].type = 'LOCAL'
+    pass
 
 
 # Enum Class for Mesh Type
@@ -3204,7 +3218,8 @@ class AMBF_OT_load_ambf_file(Operator):
 
     def execute(self, context):
         self._yaml_filepath = str(bpy.path.abspath(context.scene['ambf_load_adf_filepath']))
-        set_view_transform_orientation_to_local()
+        # set_view_transform_orientation_to_local()
+        bpy.context.scene.transform_orientation_slots[0].type = 'LOCAL'
         print('Loading ADF File: ', self._yaml_filepath)
         yaml_file = open(self._yaml_filepath)
         
@@ -3536,7 +3551,8 @@ class AMBF_PT_main_panel(Panel):
     ambf_object_types = ['RIGID_BODY', 'CONSTRAINT', 'COLLISION_SHAPE', 'GHOST_OBJECT', 'CAMERA', 'LIGHT', 'SENSOR', 'ACTUATOR']
 
     setup_yaml()
-    set_view_transform_orientation_to_local()
+    # set_view_transform_orientation_to_local()
+    bpy.context.scene.transform_orientation_slots[0].type = 'LOCAL'
 
     def draw(self, context):
 
@@ -4386,7 +4402,64 @@ class AMBF_PT_ambf_sensor(Panel):
         row = layout.row()
         row.alignment = 'EXPAND'
         row.prop(context.object, 'ambf_object_visible_size')
+
+class AMBF_PT_ambf_soft_body(Panel):
+    """Add Soft Body Properties"""
+    bl_label = "AMBF SOFT BODY PROPERTIES"
+    bl_idname = "AMBF_PT_ambf_soft_body"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "physics"
+
+    @classmethod
+    def poll(self, context):
+        active = False
+        active_obj_handle = get_active_object()
+        active = True          
+        return active
+    
+    def draw(self, context):
+        layout = self.layout
+        # Name property
+        row = layout.row()
+        row.prop(context.object, 'name')
+
+        # Collision Mesh Type property
+        row = layout.row()
+        row.prop(context.object, 'ambf_collision_mesh_type')
+
+        # Use Separate Collision Mesh property
+        row = layout.row()
+        row.prop(context.object, 'ambf_use_separate_collision_mesh')
+
+        # Collision Margin Enable property
+        row = layout.row()
+        row.prop(context.object, 'ambf_collision_margin_enable')
+
+        # Collision Margin property
+        row = layout.row()
+        row.prop(context.object, 'ambf_collision_margin')
+
+        # Collision Groups property
+        row = layout.row()
+        row.prop(context.object, 'ambf_collision_groups')
         
+        # Collision Shape property
+        row = layout.row()
+        row.prop(context.object, 'ambf_collision_shape')
+
+        # Collision Show Shapes property
+        row = layout.row()
+        row.prop(context.object, 'ambf_collision_show_shapes_per_object')
+
+
+
+
+
+
+
+    
+    
 
 class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
     ambf_collision_shape_radius: FloatProperty \
@@ -4508,7 +4581,7 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_PT_ambf_ghost_object,
                   AMBF_PT_ambf_constraint,
                   AMBF_PT_ambf_actuator,
-                  AMBF_PT_ambf_sensor,
+                  AMBF_PT_ambf_sensor,AMBF_PT_ambf_soft_body,
                   AMBF_OT_ambf_move_collision_mesh_to_body_origin,
                   AMBF_OT_ambf_collision_mesh_use_current_location
 )
