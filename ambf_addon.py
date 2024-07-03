@@ -8,13 +8,14 @@
 
 bl_info = {
     "name": "Asynchronous Multi-Body Framework (AMBF) Config Creator",
-    "author": "Adnan Munawar",
+    "author": "Adnan Munawar, Shiyue Vanessa Wang",
     "version": (0, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Add > Mesh > AMBF",
     "description": "Helps Generate AMBF Config File and Saves both High and Low Resolution(Collision) Meshes",
     "warning": "",
-    "wiki_url": "https://github.com/WPI-AIM/ambf_addon",
+    # "wiki_url": "https://github.com/WPI-AIM/ambf_addon",
+    "wiki_url": "https://github.com/capricieuxV/ambf__blender_addon",
     "category": "AMBF",
     }
 
@@ -95,13 +96,12 @@ class JointTemplate:
 class CameraTemplate:
     def __init__(self):
         self._adf_data = OrderedDict()
-        self._adf_data['namespace'] = ''
         self._adf_data['name'] = ''
         self._adf_data['location'] = get_pose_ordered_dict()
         self._adf_data['look at'] = get_pose_ordered_dict()
         self._adf_data['up'] = get_pose_ordered_dict()
-        self._adf_data['clipping plane'] = {'near': 0.0, 'far': 0.0}
-        self._adf_data['field view angle'] = 0.0
+        self._adf_data['clipping plane'] = {'near': 0.0, 'far': 10.0}
+        self._adf_data['field view angle'] = 1.0
         # self._adf_data['orthographic view width'] = 0.0
         # self._adf_data['stereo'] = {'mode': "", 'eye separation': 0.0, 'focal length': 0.0}
         # self._adf_data['controlling devices'] = []
@@ -122,21 +122,21 @@ class CameraTemplate:
 class LightTemplate:
     def __init__(self):
         self._adf_data = OrderedDict()
-        self.adf_data['namespace'] = ''
+        # self._adf_data['namespace'] = ''
         self._adf_data['name'] = ''
         self._adf_data['location'] = get_pose_ordered_dict()
-        # self._adf_data['color'] = ''
+        self._adf_data['color'] = ''
         # self._adf_data['intensity'] = 0.0 
-        # self._adf_data['type'] = 'POINT'
+        self._adf_data['type'] = 'POINT'
         # self._adf_data['spot'] = {'angle': 0.0, 'blend': 0.0}
         self._adf_data['direction'] = get_xyz_ordered_dict()
         # self._adf_data['distance'] = 0.0
         # self._adf_data['decay'] = 0.0
-        self._adf_data['spot exponent'] = 0.0
-        self._adf_data['shadow quality'] = 0.0
-        self._adf_data['cutoff angle'] = 0.0
+        # self._adf_data['spot exponent'] = 1.0
+        # self._adf_data['shadow quality'] = 1.0
+        # self._adf_data['cutoff angle'] = 1.0
         self._adf_data['visible'] = False
-        self._adf_data['parent'] = ''
+        # self._adf_data['parent'] = ''
         # self._adf_data['publish image'] = False
         # self._adf_data['publish image interval'] = 0
         # self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
@@ -324,7 +324,6 @@ def get_rot_mat_from_vecs(vecA, vecB):
     # Rotation matrix representing the above angular offset
     rot_mat = mat.Rotation(angle, 4, axis)
     return rot_mat, angle
-
 
 def ensure_collision_shape_material():
     # Create a use a material only for the first instance
@@ -1715,7 +1714,6 @@ class AMBF_OT_generate_ambf_file(Operator):
         actuator_data['location']['orientation']['y'] = ambf_round(world_rot[2])
         
     def generate_camera_data_from_ambf_camera(self, adf_data, camera_obj_handle):
-        # print("\nCAMERA NAME: ", camera_obj_handle.name)
         if camera_obj_handle.ambf_object_type != 'CAMERA':
             return
         
@@ -1726,6 +1724,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         if is_object_hidden(camera_obj_handle) is True:
             return
 
+        print(f"Generating Camera {camera_obj_handle.name}")
         camera_template = CameraTemplate()
         camera_data = camera_template._adf_data
 
@@ -1740,58 +1739,94 @@ class AMBF_OT_generate_ambf_file(Operator):
         world_pos = camera_obj_handle.matrix_world.translation
         world_rot = camera_obj_handle.matrix_world.to_euler()
 
-        camera_data['location'] = {"x": ambf_round(world_pos.x), "y": ambf_round(world_pos.y), "z": ambf_round(world_pos.z)}
-        camera_data['look at'] = {"x": 0.0, "y": 0.0, "z": 1.0}
-        camera_data['up'] = {"x": 0.0, "y": 1.0, "z": 1.0}
+        # Convert the Euler rotation to a rotation matrix
+        rot_matrix = world_rot.to_matrix().to_4x4()
+
+        # Define the default forward, right, and up vectors
+
+        track_axis = camera_obj_handle.constraints.data.track_axis
+
+        coef = 1
+        if "NEG" in track_axis:
+            coef = -1
         
-        camera_yaml_name = self.add_body_prefix_str(camera_data['name'])
+        if "X" in track_axis:
+            forward0 = coef * mathutils.Vector((1, 0, 0))
+        elif "Y" in track_axis:
+            forward0 = coef * mathutils.Vector((0, 1, 0))
+        elif "Z" in track_axis:
+            forward0 = coef * mathutils.Vector((0, 0, 1))
+
+        up_axis = camera_obj_handle.constraints.data.up_axis  
+
+        if "X" in up_axis:
+            up0 = mathutils.Vector((1, 0, 0))
+        elif "Y" in up_axis:
+            up0 = mathutils.Vector((0, 1, 0))
+        elif "Z" in up_axis:
+            up0 = mathutils.Vector((0, 0, 1))     
+
+        right0 = forward0.cross(up0)
+
+        # Transform these directions by the rotation matrix
+        forward = rot_matrix @ forward0
+        right = rot_matrix @ right0
+        up = rot_matrix @ up0        
+
+        look_at = world_pos - forward
+        right = rot_matrix @ right0
+        up = forward.cross(right).normalized()
+
+        camera_data['location'] = {'x': ambf_round(world_pos.x), 'y': ambf_round(world_pos.y), 'z': ambf_round(world_pos.z)}
+        camera_data['look at'] = {'x': ambf_round(look_at[0]), 'y': ambf_round(look_at[1]), 'z': ambf_round(look_at[2])}
+        camera_data['up'] = {'x': ambf_round(up[0]), 'y': ambf_round(up[1]), 'z': ambf_round(up[2])}
+
+        camera_data['field view angle'] = camera_obj_handle.data.angle
+        camera_data['clipping plane']['near'] = camera_obj_handle.data.clip_start
+        camera_data['clipping plane']['far'] = camera_obj_handle.data.clip_end
+
+        camera_yaml_name = self.add_camera_prefix_str(camera_data['name'])
         adf_data[camera_yaml_name] = camera_data
-        self.camera_name_prefix.append(camera_yaml_name)
+        self._camera_names_list.append(camera_yaml_name)
 
-    # def generate_light_data_from_ambf_light(self, adf_data, light_obj_handle):
-    #     if light_obj_handle.ambf_object_type != 'LIGHT':
-    #         return
+    def generate_light_data_from_ambf_light(self, adf_data, light_obj_handle):
+        if light_obj_handle.ambf_object_type != 'LIGHT':
+            return
         
-    #     # The object is unlinked from the scene. Don't write it
-    #     if self._context.scene.objects.get(light_obj_handle.name) is None:
-    #         return
+        # The object is unlinked from the scene. Don't write it
+        if self._context.scene.objects.get(light_obj_handle.name) is None:
+            return
 
-    #     if is_object_hidden(light_obj_handle) is True:
-    #         return
+        if is_object_hidden(light_obj_handle) is True:
+            return
 
-    #     light_template = LightTemplate()
-    #     light_data = light_template._adf_data
+        print(f"Generating Light {light_obj_handle.name}")
+        light_template = LightTemplate()
+        light_data = light_template._adf_data
 
-    #     if not compare_namespace_with_global(light_obj_handle.name):
-    #         if get_namespace(light_obj_handle.name) != '':
-    #             light_data['namespace'] = get_namespace(light_obj_handle.name)
+        if not compare_namespace_with_global(light_obj_handle.name):
+            if get_namespace(light_obj_handle.name) != '':
+                light_data['namespace'] = get_namespace(light_obj_handle.name)
 
-    #     light_obj_handle_name = remove_namespace_prefix(light_obj_handle.name)        
-    #     light_data['name'] = light_obj_handle_name
+        light_obj_handle_name = remove_namespace_prefix(light_obj_handle.name)        
+        light_data['name'] = light_obj_handle_name
+        light_data['type'] = light_obj_handle.data.type
+        light_data['color'] = {'r': ambf_round(light_obj_handle.data.color[0]),
+                               'g': ambf_round(light_obj_handle.data.color[1]),
+                               'b': ambf_round(light_obj_handle.data.color[2])}
+        light_data['energy'] = ambf_round(light_obj_handle.data.energy)
+        light_data['visible'] = light_obj_handle.ambf_object_visible
 
-    #     # Get light properties
-    #     light_data['type'] = light_obj_handle.data.type
-    #     light_data['energy'] = light_obj_handle.data.energy
-    #     light_data['color'] = light_obj_handle.data.color
-    #     light_data['distance'] = light_obj_handle.data.distance
-    #     light_data['spot_size'] = light_obj_handle.data.spot_size
-    #     light_data['spot_blend'] = light_obj_handle.data.spot_blend
+        # Get light position and orientation
+        world_pos = light_obj_handle.matrix_world.translation
+        world_rot = light_obj_handle.matrix_world.to_euler()
 
-    #     # Get light position and orientation
-    #     world_pos = light_obj_handle.matrix_world.translation
-    #     world_rot = light_obj_handle.matrix_world.to_euler()
-    #     light_pos = light_data['location']['position']
-    #     light_rot = light_data['location']['orientation']
-    #     light_pos['x'] = ambf_round(world_pos.x)
-    #     light_pos['y'] = ambf_round(world_pos.y)
-    #     light_pos['z'] = ambf_round(world_pos.z)
-    #     light_rot['r'] = ambf_round(world_rot[0])
-    #     light_rot['p'] = ambf_round(world_rot[1])
-    #     light_rot['y'] = ambf_round(world_rot[2])
+        light_data['location'] = {'x': ambf_round(world_pos.x), 'y': ambf_round(world_pos.y), 'z': ambf_round(world_pos.z)}
+        light_data['direction'] = {'x': ambf_round(world_rot[0]), 'y': ambf_round(world_rot[1]), 'z': ambf_round(world_rot[2])}
 
-    #     light_yaml_name = self.add_body_prefix_str(light_data['name'])
-    #     adf_data[light_yaml_name] = light_data
-    #     self.light_name_prefix.append(light_yaml_name)
+        light_yaml_name = self.add_light_prefix_str(light_data['name'])
+        adf_data[light_yaml_name] = light_data
+        self._light_names_list.append(light_yaml_name)
 
     # Get the joints axis as a vector
     def get_axis_of_ambf_constraint(self, joint_obj_handle):
@@ -2022,23 +2057,29 @@ class AMBF_OT_generate_ambf_file(Operator):
         for obj_handle in _heirarichal_objects_list:
             self.generate_body_data_from_ambf_rigid_body(self._adf, obj_handle)
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
-            # self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
+            self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
+            self.generate_light_data_from_ambf_light(self._adf, obj_handle)
+            # self.generate_sensor_data_from_ambf_sensor(self._adf, obj_handle)
+            # self.generate_actuator_data_from_ambf_actuator(self._adf, obj_handle)
 
-        # Now populate the bodies and joints tag
+        # Now populate the tags
         self._adf['bodies'] = self._body_names_list
         self._adf['joints'] = self._joint_names_list
         self._adf['cameras'] = self._camera_names_list
+        self._adf['lights'] = self._light_names_list
+        # self._adf['sensors'] = self._sensor_names_list
+        # self._adf['actuators'] = self._actuator_names_list
         
         yaml.dump(self._adf, output_file)
 
         header_str = "# AMBF Version: %s\n" \
-                     "# Generated By: ambf_addon for Blender %s\n" \
-                     "# Link: %s\n" \
-                     "# Generated on: %s\n"\
-                     % (str(bl_info['version']).replace(', ', '.'),
-                        str(bl_info['blender']).replace(', ', '.'),
-                        bl_info['wiki_url'],
-                        datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                 "# Generated By: ambf_addon for Blender %s\n" \
+                 "# Author: %s\n" \
+                 "# Generated on: %s\n"\
+                 % (str(bl_info['version']).replace(', ', '.'),
+                    str(bl_info['blender']).replace(', ', '.'),
+                    bl_info['author'],
+                    datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         prepend_comment_to_file(output_filename, header_str)
 
 
@@ -3448,7 +3489,58 @@ class AMBF_OT_ambf_rigid_body_activate(Operator):
             context.object.ambf_object_type = 'NONE'
 
         return {'FINISHED'}
+    
+class AMBF_OT_ambf_camera_activate(Operator):
+    """Add Camera Properties"""
+    bl_label = "AMBF CAMERA ACTIVATE"
+    bl_idname = "ambf.ambf_camera_activate"
 
+    def execute(self, context):
+        if context.object.ambf_object_type != 'CAMERA':
+            context.object.ambf_object_type = 'CAMERA'
+        else:
+            context.object.ambf_object_type = 'NONE'
+
+        return {'FINISHED'}
+
+class AMBF_OT_ambf_light_activate(Operator):
+    """Add Light Properties"""
+    bl_label = "AMBF LIGHT ACTIVATE"
+    bl_idname = "ambf.ambf_light_activate"
+
+    def execute(self, context):
+        if context.object.ambf_object_type != 'LIGHT':
+            context.object.ambf_object_type = 'LIGHT'
+        else:
+            context.object.ambf_object_type = 'NONE'
+
+        return {'FINISHED'}
+
+class AMBF_OT_ambf_actuator_activate(Operator):
+    """Add Actuator Properties"""
+    bl_label = "AMBF ACTUATOR ACTIVATE"
+    bl_idname = "ambf.ambf_actuator_activate"
+
+    def execute(self, context):
+        if context.object.ambf_object_type != 'ACTUATOR':
+            context.object.ambf_object_type = 'ACTUATOR'
+        else:
+            context.object.ambf_object_type = 'NONE'
+
+        return {'FINISHED'}
+    
+class AMBF_OT_ambf_sensor_activate(Operator):
+    """Add Sensor Properties"""
+    bl_label = "AMBF SENSOR ACTIVATE"
+    bl_idname = "ambf.ambf_sensor_activate"
+
+    def execute(self, context):
+        if context.object.ambf_object_type != 'SENSOR':
+            context.object.ambf_object_type = 'SENSOR'
+        else:
+            context.object.ambf_object_type = 'NONE'
+
+        return {'FINISHED'}
 
 class AMBF_OT_ambf_ghost_object_activate(Operator):
     """Add GHOST OBJECT Properties"""
@@ -3461,6 +3553,19 @@ class AMBF_OT_ambf_ghost_object_activate(Operator):
             cnt = len(context.object.ambf_collision_shape_prop_collection.items())
             if cnt == 0:
                 add_collision_shape_property(context.object)
+        else:
+            context.object.ambf_object_type = 'NONE'
+
+        return {'FINISHED'}
+    
+class AMBF_OT_ambf_soft_body_activate(Operator):
+    """Add Soft Body Properties"""
+    bl_label = "AMBF SOFT BODY ACTIVATE"
+    bl_idname = "ambf.ambf_soft_body_activate"
+
+    def execute(self, context):
+        if context.object.ambf_object_type != 'SOFT_BODY':
+            context.object.ambf_object_type = 'SOFT_BODY'
         else:
             context.object.ambf_object_type = 'NONE'
 
@@ -3791,7 +3896,7 @@ class AMBF_PT_ambf_rigid_body(Panel):
         active = False
         active_obj_handle = get_active_object()
         if active_obj_handle: # Check if an obj_handle is active
-            if active_obj_handle.type in ['EMPTY', 'MESH']:
+            if active_obj_handle.type == 'MESH':
                 active = True
                 
         return active
@@ -4331,6 +4436,98 @@ class AMBF_PT_ambf_constraint(Panel):
             col = layout.column()
             col.prop(context.object, 'ambf_constraint_passive')
 
+class AMBF_PT_ambf_camera(Panel):
+    """Add Camera Properties"""
+    bl_label = "AMBF CAMERA PROPERTIES"
+    bl_idname = "AMBF_PT_ambf_camera"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "physics"
+
+    @classmethod
+    def poll(self, context):
+        active = False
+        active_obj_handle = get_active_object()
+        if active_obj_handle:
+            if active_obj_handle.type in ['CAMERA']:
+                active = True
+        return active
+    
+    def draw(self, context):
+        layout = self.layout
+
+        row = layout.row()
+        row.alignment = 'EXPAND'
+        row.operator('ambf.ambf_camera_activate', text='Enable AMBF Camera', icon='CAMERA_DATA')
+        row.scale_y = 2
+
+        if context.object.ambf_object_type == 'CAMERA':
+            layout.separator()
+            layout.separator()
+
+            col = layout.column()
+            col.enabled = True
+            col.prop(context.object, 'name')
+
+            layout.separator()
+
+            col = layout.column()
+            col.prop(context.object, 'ambf_object_visible', toggle=False)
+
+            layout.separator()
+
+            col = layout.column()
+            col.prop(context.object.data, 'angle')
+            
+            col = layout.column()
+            col.prop(context.object.data, 'clip_start')
+            
+            col = layout.column()
+            col.prop(context.object.data, 'clip_end')
+
+
+class AMBF_PT_ambf_light(Panel):
+    """Add Light Properties"""
+    bl_label = "AMBF LIGHT PROPERTIES"
+    bl_idname = "AMBF_PT_ambf_light"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "physics"
+
+    @classmethod
+    def poll(self, context):
+        active = False
+        active_obj_handle = get_active_object()
+        if active_obj_handle:
+            if active_obj_handle.type in ['LIGHT']:
+                active = True
+        return active
+    
+    def draw(self, context):
+        layout = self.layout
+
+        row = layout.row()
+        row.alignment = 'EXPAND'
+        row.operator('ambf.ambf_light_activate', text='Enable AMBF Light', icon='LIGHT')
+        row.scale_y = 2
+
+        if context.object.ambf_object_type == 'LIGHT':
+            row = layout.row()
+            row.prop(context.object, 'name')
+            
+            row = layout.row()
+            row.prop(context.object.data, 'type')
+
+            row = layout.row()
+            row.prop(context.object.data, 'color')
+
+            row = layout.row()
+            row.prop(context.object.data, 'energy')
+
+            row = layout.row()
+            row.prop(context.object, 'ambf_object_visible', toggle=False)
+
+
 class AMBF_PT_ambf_actuator(Panel):
     """Add Actuator Properties"""
     bl_label = "AMBF ACTUATOR PROPERTIES"
@@ -4350,6 +4547,12 @@ class AMBF_PT_ambf_actuator(Panel):
     
     def draw(self, context):
         layout = self.layout
+
+        row = layout.row()
+        row.alignment = 'EXPAND'
+        row.operator('ambf.ambf_actuator_activate', text='Enable AMBF Actuator', icon='FORCE_HARMONIC')
+        row.scale_y = 2
+
         # Name property
         row = layout.row()
         row.prop(context.object, 'name')
@@ -4386,6 +4589,12 @@ class AMBF_PT_ambf_sensor(Panel):
     
     def draw(self, context):
         layout = self.layout
+
+        row = layout.row()
+        row.alignment = 'EXPAND'
+        row.operator('ambf.ambf_sensor_activate', text='Enable AMBF Sensor', icon='FORCE_HARMONIC')
+        row.scale_y = 2
+
         # Name property
         row = layout.row()
         row.prop(context.object, 'name')
@@ -4403,6 +4612,9 @@ class AMBF_PT_ambf_sensor(Panel):
         row.alignment = 'EXPAND'
         row.prop(context.object, 'ambf_object_visible_size')
 
+import bpy
+from bpy.types import Panel
+
 class AMBF_PT_ambf_soft_body(Panel):
     """Add Soft Body Properties"""
     bl_label = "AMBF SOFT BODY PROPERTIES"
@@ -4412,54 +4624,233 @@ class AMBF_PT_ambf_soft_body(Panel):
     bl_context = "physics"
 
     @classmethod
-    def poll(self, context):
+    def poll(cls, context):
         active = False
-        active_obj_handle = get_active_object()
-        active = True          
+        active_obj_handle = context.object
+        if active_obj_handle: # Check if an obj_handle is active
+            if active_obj_handle.type == 'MESH':
+                active = True
         return active
     
     def draw(self, context):
         layout = self.layout
+        obj = context.object
+        soft_body_props = context.scene.soft_body_properties
+
+        row = layout.row()
+        row.alignment = 'EXPAND'
+        row.operator('ambf.ambf_soft_body_activate', text='Enable AMBF Soft Body', icon='RNA_ADD')
+        row.scale_y = 2
+        
         # Name property
         row = layout.row()
-        row.prop(context.object, 'name')
+        row.prop(obj, 'name')
 
         # Collision Mesh Type property
         row = layout.row()
-        row.prop(context.object, 'ambf_collision_mesh_type')
+        row.prop(obj, 'ambf_collision_mesh_type')
 
         # Use Separate Collision Mesh property
         row = layout.row()
-        row.prop(context.object, 'ambf_use_separate_collision_mesh')
+        row.prop(obj, 'ambf_use_separate_collision_mesh')
 
         # Collision Margin Enable property
         row = layout.row()
-        row.prop(context.object, 'ambf_collision_margin_enable')
+        row.prop(obj, 'ambf_collision_margin_enable')
 
         # Collision Margin property
         row = layout.row()
-        row.prop(context.object, 'ambf_collision_margin')
+        row.prop(obj, 'ambf_collision_margin')
 
         # Collision Groups property
         row = layout.row()
-        row.prop(context.object, 'ambf_collision_groups')
+        row.prop(obj, 'ambf_collision_groups')
         
         # Collision Shape property
         row = layout.row()
-        row.prop(context.object, 'ambf_collision_shape')
+        row.prop(obj, 'ambf_collision_shape')
 
         # Collision Show Shapes property
         row = layout.row()
-        row.prop(context.object, 'ambf_collision_show_shapes_per_object')
+        row.prop(obj, 'ambf_collision_show_shapes_per_object')
 
-
-
-
-
-
-
-    
-    
+        # Soft Body Properties
+        row = layout.row()
+        row.prop(soft_body_props, 'damping')
+        if soft_body_props.damping:
+            row = layout.row()
+            row.prop(soft_body_props, 'linear_damping')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_linear_stiffness')
+        if soft_body_props.enable_linear_stiffness:
+            row = layout.row()
+            row.prop(soft_body_props, 'linear_stiffness')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_angular_stiffness')
+        if soft_body_props.enable_angular_stiffness:
+            row = layout.row()
+            row.prop(soft_body_props, 'angular_stiffness')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_volume_stiffness')
+        if soft_body_props.enable_volume_stiffness:
+            row = layout.row()
+            row.prop(soft_body_props, 'volume_stiffness')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_volume_constraint_force')
+        if soft_body_props.enable_volume_constraint_force:
+            row = layout.row()
+            row.prop(soft_body_props, 'volume_constraint_force')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_pressure')
+        if soft_body_props.enable_pressure:
+            row = layout.row()
+            row.prop(soft_body_props, 'pressure')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_volume_conservation')
+        if soft_body_props.enable_volume_conservation:
+            row = layout.row()
+            row.prop(soft_body_props, 'volume_conservation')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_dynamic_friction')
+        if soft_body_props.enable_dynamic_friction:
+            row = layout.row()
+            row.prop(soft_body_props, 'dynamic_friction')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_mass_thickness')
+        if soft_body_props.enable_mass_thickness:
+            row = layout.row()
+            row.prop(soft_body_props, 'mass_thickness')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_collision_hardness')
+        if soft_body_props.enable_collision_hardness:
+            row = layout.row()
+            row.prop(soft_body_props, 'collision_hardness')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_kinematic_hardness')
+        if soft_body_props.enable_kinematic_hardness:
+            row = layout.row()
+            row.prop(soft_body_props, 'kinematic_hardness')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_shear_hardness')
+        if soft_body_props.enable_shear_hardness:
+            row = layout.row()
+            row.prop(soft_body_props, 'shear_hardness')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_aerodynamic_hardness')
+        if soft_body_props.enable_aerodynamic_hardness:
+            row = layout.row()
+            row.prop(soft_body_props, 'aerodynamic_hardness')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_self_collision_hardness_radius_clamped')
+        if soft_body_props.enable_self_collision_hardness_radius_clamped:
+            row = layout.row()
+            row.prop(soft_body_props, 'self_collision_hardness_radius_clamped')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_self_kinematic_hardness_radius_clamped')
+        if soft_body_props.enable_self_kinematic_hardness_radius_clamped:
+            row = layout.row()
+            row.prop(soft_body_props, 'self_kinematic_hardness_radius_clamped')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_self_shear_hardness_radius_clamped')
+        if soft_body_props.enable_self_shear_hardness_radius_clamped:
+            row = layout.row()
+            row.prop(soft_body_props, 'self_shear_hardness_radius_clamped')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_self_collision_hardness_split_clamped')
+        if soft_body_props.enable_self_collision_hardness_split_clamped:
+            row = layout.row()
+            row.prop(soft_body_props, 'self_collision_hardness_split_clamped')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_self_kinematic_hardness_split_clamped')
+        if soft_body_props.enable_self_kinematic_hardness_split_clamped:
+            row = layout.row()
+            row.prop(soft_body_props, 'self_kinematic_hardness_split_clamped')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_self_shear_hardness_split_clamped')
+        if soft_body_props.enable_self_shear_hardness_split_clamped:
+            row = layout.row()
+            row.prop(soft_body_props, 'self_shear_hardness_split_clamped')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_max_volume')
+        if soft_body_props.enable_max_volume:
+            row = layout.row()
+            row.prop(soft_body_props, 'max_volume')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_time_scale')
+        if soft_body_props.enable_time_scale:
+            row = layout.row()
+            row.prop(soft_body_props, 'time_scale')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_velocity_iterations')
+        if soft_body_props.enable_velocity_iterations:
+            row = layout.row()
+            row.prop(soft_body_props, 'velocity_iterations')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_position_iterations')
+        if soft_body_props.enable_position_iterations:
+            row = layout.row()
+            row.prop(soft_body_props, 'position_iterations')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_damping_iterations')
+        if soft_body_props.enable_damping_iterations:
+            row = layout.row()
+            row.prop(soft_body_props, 'damping_iterations')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_constraint_iterations')
+        if soft_body_props.enable_constraint_iterations:
+            row = layout.row()
+            row.prop(soft_body_props, 'constraint_iterations')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_flags')
+        if soft_body_props.enable_flags:
+            row = layout.row()
+            row.prop(soft_body_props, 'flags')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_bending_constraint')
+        if soft_body_props.enable_bending_constraint:
+            row = layout.row()
+            row.prop(soft_body_props, 'bending_constraint')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_cutting')
+        if soft_body_props.enable_cutting:
+            row = layout.row()
+            row.prop(soft_body_props, 'cutting')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_clusters')
+        if soft_body_props.enable_clusters:
+            row = layout.row()
+            row.prop(soft_body_props, 'clusters')
+        
+        row = layout.row()
+        row.prop(soft_body_props, 'enable_fixed_nodes')
 
 class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
     ambf_collision_shape_radius: FloatProperty \
@@ -4542,6 +4933,7 @@ class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
 
 custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_PG_CollisionShapePropGroup,
+
                   AMBF_OT_cleanup_all,
                   AMBF_OT_ambf_rigid_body_cleanup,
                   AMBF_OT_ambf_constraint_cleanup,
@@ -4549,14 +4941,17 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_OT_select_all,
                   AMBF_OT_hide_passive_joints,
                   AMBF_OT_hide_all_joints,
+
                   AMBF_OT_remove_low_res_mesh_modifiers,
                   AMBF_OT_generate_low_res_mesh_modifiers,
                   AMBF_OT_generate_ambf_file,
                   AMBF_OT_save_meshes,
                   AMBF_OT_load_ambf_file,
+
                   AMBF_OT_create_joint,
                   AMBF_OT_create_sensor,
                   AMBF_OT_create_actuator,
+
                   AMBF_OT_remove_object_namespaces,
                   AMBF_OT_estimate_inertial_offsets,
                   AMBF_OT_estimate_shape_offsets,
@@ -4572,16 +4967,28 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_OT_estimate_inertia_per_object,
                   AMBF_OT_estimate_joint_controller_gain_per_object,
                   AMBF_OT_auto_rename_joint_per_object,
+
                   AMBF_OT_ambf_rigid_body_activate,
                   AMBF_OT_ambf_ghost_object_activate,
+                  AMBF_OT_ambf_soft_body_activate,
                   AMBF_OT_ambf_constraint_activate,
+                  AMBF_OT_ambf_camera_activate,
+                  AMBF_OT_ambf_light_activate,
+                  AMBF_OT_ambf_sensor_activate,
+                  AMBF_OT_ambf_actuator_activate, 
+
                   OBJECT_PT_DebuggerPanel,
+
                   AMBF_PT_main_panel,
                   AMBF_PT_ambf_rigid_body,
                   AMBF_PT_ambf_ghost_object,
+                  AMBF_PT_ambf_soft_body,
                   AMBF_PT_ambf_constraint,
                   AMBF_PT_ambf_actuator,
-                  AMBF_PT_ambf_sensor,AMBF_PT_ambf_soft_body,
+                  AMBF_PT_ambf_sensor,
+                  AMBF_PT_ambf_camera,
+                  AMBF_PT_ambf_light,
+                  
                   AMBF_OT_ambf_move_collision_mesh_to_body_origin,
                   AMBF_OT_ambf_collision_mesh_use_current_location
 )
@@ -4607,6 +5014,7 @@ def register():
                 ('LIGHT', 'LIGHT', '', '', 6), 
                 ('SENSOR', 'SENSOR', '', '', 7),
                 ('ACTUATOR', 'ACTUATOR', '', '', 8),
+                ('SOFT_BODY', 'SOFT_BODY', '', '', 9),
             ],
             default='NONE'
         )
@@ -4943,8 +5351,9 @@ def register():
             description='The output of the controller fed to the simulation. Better to use (VELOCITY) with P <= 10, D <= 1'
         )
     
-    Object.ambf_camera_fov = FloatProperty(name="FOV", default=60.0, min=0.0)
-    Object.ambf_camera_near = FloatProperty(name="Near", default=0.1, min=0.0)
+    Object.ambf_camera_fov = FloatProperty(name="FOV", default=1.0, min=0.0)
+    Object.ambf_camera_near_clip = FloatProperty(name="Near", default=0.0)
+    Object.ambf_camera_far_clip = FloatProperty(name="Far", default=10.0)
 
     Scene.ambf_adf_path = StringProperty \
             (
