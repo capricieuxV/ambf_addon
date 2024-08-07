@@ -478,7 +478,18 @@ class AMBFCollectionProperties(PropertyGroup):
     mesh_path: StringProperty(name="Meshes (Save To)", default="", description="Define the path to save mesh files", subtype='DIR_PATH')
     adf_path: StringProperty(name="Config (Save To)", default="", description="Define the root path of the project", subtype='FILE_PATH')
     namespace: StringProperty(name="AMBF Namespace", default="/ambf/env/", description="The namespace for all bodies in this scene")
-    meshes_save_type: StringProperty(name="Meshes Save Type", default="")
+    meshes_save_type: EnumProperty \
+            (
+            items=
+            [
+                ('STL', 'STL', 'STL'),
+                ('OBJ', 'OBJ', 'OBJ'),
+                ('3DS', '3DS', '3DS'),
+                ('PLY', 'PLY', 'PLY')
+            ],
+            name="Mesh Type",
+            default='STL'
+        )
     save_high_res: BoolProperty(name="Save High Res", default=False)
     save_low_res: BoolProperty(name="Save Low Res", default=False)
     save_textures: BoolProperty(name="Save Textures", default=False)
@@ -488,14 +499,9 @@ class AMBFCollectionProperties(PropertyGroup):
     ignore_inter_collision: BoolProperty(name="Ignore Inter Collision", default=False)
     precision: StringProperty(name="Precision", default="")
 
-
-def update_collection_enum(self, context):
-    self.collection_enum = [(coll.name, coll.name, "") for coll in bpy.data.collections]
-
-bpy.types.Scene.collection_enum = bpy.props.EnumProperty(items=update_collection_enum, name="Collections")
-
 def update_collection_enum_items(self, context):
-    return [(coll.name, coll.name, "") for coll in bpy.data.collections if coll.name not in [c.name for c in context.scene.ambf_collection_properties]]
+    items = [(coll.name, coll.name, "") for coll in bpy.data.collections if coll.name not in [c.name for c in context.scene.ambf_collection_properties]]
+    return items
 
 bpy.types.Scene.collection_enum = bpy.props.EnumProperty(items=update_collection_enum_items, name="Collections")
 
@@ -3807,19 +3813,14 @@ class AMBF_PT_main_panel(Panel):
 
         scene = context.scene
 
-        col = layout.column()
-        col.operator("ambf.add_collection")
+        layout.prop(scene, "collection_enum", text="Select Collection")
+        layout.operator("ambf.add_collection", text="Add Collection")
 
         for index, collection in enumerate(scene.ambf_collection_properties):
             box = layout.box()
             row = box.row()
             row.prop(collection, "name")
             row.operator("ambf.remove_collection", text="", icon='X').index = index
-
-            col = box.column()
-            col.prop(collection, "mesh_path")
-            col.prop(collection, "adf_path")
-            col.prop(collection, "namespace")
 
             # Section for saving meshes and textures
             sbox = box.box()
