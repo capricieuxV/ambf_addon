@@ -1,0 +1,93 @@
+soft bodies: 
+  - BODY Jelly
+
+joints: []
+
+cameras: []
+
+lights: []
+
+sensors: []
+
+actuators: []
+
+high resolution path: ./high_res/
+low resolution path: ./low_res/
+ignore inter-collision: true
+gravity:
+  x: 0.0
+  y: 0.0
+  z: -9.81
+namespace: '/ambf/env/'
+
+BODY Jelly:
+  name: 'Jelly'
+  mesh: 'Jelly.STL'
+  collision margin: 0.001
+  scale: 1.0
+  inertial offset:
+    position:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    orientation:
+      r: 0.0
+      p: 0.0
+      y: 0.0
+  namespace: '/ambf/env/softbody'
+  mass: 1
+  linear gain: 0.1
+  angular gain: 0.1
+  location:
+    position:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    orientation:
+      r: 0.0
+      p: 0.0
+      y: 0.0
+  color: 'random'
+  color rgba:
+    r: 1.0
+    g: 0.0
+    b: 0.0
+    a: 1.0
+  color components:
+    r: 1.0
+    g: 0.0
+    b: 0.0
+  config: # stiffness, pressure, shape matching
+    kLST: 0.01 # linear stiffness -> keep
+    # kAST: 0.01
+    # kVST: 0.01
+    # kVCF: 0.01
+    kDP: 0.01 # keep damping
+    # kDG: 0.1
+    # kLF: 0.1
+    kPR: 0.5 # pressure
+    # kVC: 0.1
+    # kDF: 0.1
+    # kMT: 0.1 
+    # kCHR: 0.1
+    # kKHR: 0.1
+    # kSHR: 0.1
+    # kAHR: 0.1
+    # kSRHR_CL: 0.1
+    # kSKHR_CL: 0.1
+    # kSSHR_CL: 0.1
+    # kSR_SPLT_CL: 0.1
+    # kSK_SPLT_CL: 0.1
+    # kSS_SPLT_CL: 0.1
+    maxvolume: 1.0
+    timescale: 1.0
+    viterations: 10
+    piterations: 10
+    diterations: 10
+    citerations: 10
+    flags: 0
+    bending constraint: 1
+    cutting: false
+    clusters: 0 
+    fixed nodes: []
+randomize constraints: false

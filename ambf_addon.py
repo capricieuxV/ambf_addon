@@ -33,7 +33,6 @@ from bpy.props import BoolProperty, FloatProperty, FloatVectorProperty, BoolVect
 from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty, CollectionProperty
 from bpy.types import Scene, Operator, Panel, Object, PropertyGroup
 
-
 # Body Template for the some commonly used of afBody's data
 class BodyTemplate:
     def __init__(self):
@@ -56,7 +55,8 @@ class BodyTemplate:
 
 
 # Body Template for the some commonly used of afBody's data
-class GhostObjectTemplate:
+# No collision with this object
+class GhostObjectTemplate: 
     def __init__(self):
         self._adf_data = OrderedDict()
         self._adf_data['name'] = ""
@@ -458,6 +458,20 @@ def prepend_comment_to_file(filename, comment):
             f2.write(f.read())
     os.rename(temp_filename, filename)
 
+def update_selected_collections(self, context):
+    selected_collections = self.selected_collections.split(',')
+    for collection in bpy.data.collections:
+        if collection.name in selected_collections:
+            collection.hide_viewport = False
+        else:
+            collection.hide_viewport = True
+
+bpy.types.Scene.selected_collections = bpy.props.StringProperty(
+    name="Selected Collections",
+    description="Comma-separated list of selected collection names",
+    default="",
+    update=update_selected_collections
+)
 
 def select_object(obj_handle, select=True):
     # print(obj_handle.name)
@@ -2040,7 +2054,7 @@ class AMBF_OT_generate_ambf_file(Operator):
                                     'y': self._context.scene.ambf_model_gravity[1],
                                     'z': self._context.scene.ambf_model_gravity[2]}
 
-        update_global_namespace(self._context)
+        update_global_namespace(self._context) #TODO: Change the name not to be global but locally set to one collections
 
         if CommonConfig.namespace != "":
             self._adf['namespace'] = CommonConfig.namespace
@@ -3376,6 +3390,23 @@ class AMBF_OT_cleanup_all(Operator):
             bpy.data.objects.remove(o)
         return {'FINISHED'}
 
+class ToggleCollectionSelectionOperator(bpy.types.Operator):
+    bl_idname = "view3d.toggle_collection_selection"
+    bl_label = "Toggle Collection Selection"
+    
+    collection_name: bpy.props.StringProperty()
+    
+    def execute(self, context):
+        scene = context.scene
+        selected_collections = scene.selected_collections.split(',')
+        
+        if self.collection_name in selected_collections:
+            selected_collections.remove(self.collection_name)
+        else:
+            selected_collections.append(self.collection_name)
+        
+        scene.selected_collections = ','.join(selected_collections)
+        return {'FINISHED'}
 
 class AMBF_OT_select_all(Operator):
     """Add Rigid Body Properties"""
@@ -3722,6 +3753,21 @@ class AMBF_PT_main_panel(Panel):
         row = box.row()
         row.alignment = 'CENTER'
         row.label(text='CREATE ADF:', icon='EXPORT')
+
+        scene = context.scene
+        
+        sbox = box.box()
+        row = sbox.row()
+        row.label(text="Select Collections to Operate:")
+        
+        selected_collections = scene.selected_collections.split(',')
+        
+        for collection in bpy.data.collections:
+            row = sbox.row()
+            is_selected = collection.name in selected_collections
+            icon = 'CHECKBOX_HLT' if is_selected else 'CHECKBOX_DEHLT'
+            op = row.operator("view3d.toggle_collection_selection", text=collection.name, icon=icon)
+            op.collection_name = collection.name
         
         # Panel Label
         sbox = box.box()
@@ -4161,8 +4207,9 @@ class AMBF_PT_ambf_ghost_object(Panel):
 
             layout.separator()
 
-            col = layout.column()
-            col.prop_search(context.object, "ambf_object_parent", context.scene, "objects")
+            # TODO: no parent!!
+            # col = layout.column()
+            # col.prop_search(context.object, "ambf_object_parent", context.scene, "objects")
 
             box = layout.box()
             row = box.row()
@@ -4990,7 +5037,9 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_PT_ambf_light,
                   
                   AMBF_OT_ambf_move_collision_mesh_to_body_origin,
-                  AMBF_OT_ambf_collision_mesh_use_current_location
+                  AMBF_OT_ambf_collision_mesh_use_current_location,
+
+                  ToggleCollectionSelectionOperator
 )
 
 
@@ -4999,7 +5048,14 @@ def register():
     from bpy.utils import register_class
     for cls in custom_classes:
         register_class(cls)
-        
+    
+    bpy.types.Scene.selected_collections = bpy.props.StringProperty(
+        name="Selected Collections",
+        description="Comma-separated list of selected collection names",
+        default="",
+        update=update_selected_collections
+    )
+            
     Object.ambf_object_type = EnumProperty \
             (
             name="Object Type",
@@ -5483,6 +5539,7 @@ def unregister():
     from bpy.utils import unregister_class    
     for cls in reversed(custom_classes):
         unregister_class(cls)
+    del bpy.types.Scene.selected_collections
 
 
 if __name__ == "__main__":
