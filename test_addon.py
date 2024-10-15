@@ -444,10 +444,7 @@ def populate_heirarchial_tree():
         # print('CALLING DOWNWARD TREE PASS FOR: ', grand_parent.name)
         downward_tree_pass(grand_parent, _heirarchial_bodies_list, _added_bodies_list)
 
-    
-
     return _heirarchial_bodies_list
-
 
 # Courtesy: https://stackoverflow.com/questions/5914627/prepend-line-to-beginning-of-a-file
 def prepend_comment_to_file(filename, comment):
@@ -465,13 +462,6 @@ def update_selected_collections(self, context):
             collection.hide_viewport = False
         else:
             collection.hide_viewport = True
-
-bpy.types.Scene.selected_collections = bpy.props.StringProperty(
-    name="Selected Collections",
-    description="Comma-separated list of selected collection names",
-    default="",
-    update=update_selected_collections
-)
 
 class AMBFCollectionProperties(PropertyGroup):
     name: StringProperty(name="Collection Name", default="")
@@ -495,7 +485,13 @@ class AMBFCollectionProperties(PropertyGroup):
     save_textures: BoolProperty(name="Save Textures", default=False)
     save_selection_only: BoolProperty(name="Save Selection Only", default=False)
     model_override_gravity: BoolProperty(name="Override Gravity", default=False)
-    model_gravity: StringProperty(name="Model Gravity", default="")
+    model_gravity: FloatVectorProperty\
+            (
+            name='Model Gravity',
+            default=(0.0, 0.0, -9.8),
+            options={'PROPORTIONAL'},
+            subtype='XYZ',
+        )
     ignore_inter_collision: BoolProperty(name="Ignore Inter Collision", default=False)
     precision: StringProperty(name="Precision", default="")
 
@@ -5066,7 +5062,6 @@ class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
             subtype='EULER',
         )
 
-
 custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_PG_CollisionShapePropGroup,
 
@@ -5131,7 +5126,6 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   ToggleCollectionSelectionOperator,
                   AddCollectionOperator,
                   RemoveCollectionOperator
-
 )
 
 

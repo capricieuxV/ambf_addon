@@ -100,13 +100,12 @@ class CameraTemplate:
         self._adf_data['location'] = get_pose_ordered_dict()
         self._adf_data['look at'] = get_pose_ordered_dict()
         self._adf_data['up'] = get_pose_ordered_dict()
-        self._adf_data['clipping plane'] = {'near': 0.0, 'far': 10.0}
+        self._adf_data['clipping plane'] = {'near': 1.0, 'far': 10.0}
         self._adf_data['field view angle'] = 1.0
         # self._adf_data['orthographic view width'] = 0.0
         # self._adf_data['stereo'] = {'mode': "", 'eye separation': 0.0, 'focal length': 0.0}
         # self._adf_data['controlling devices'] = []
         self._adf_data['monitor'] = 0 
-        self._adf_data['visible'] = False
         # self._adf_data['publish image'] = False
         # self._adf_data['publish image interval'] = 0
         # self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
@@ -443,8 +442,6 @@ def populate_heirarchial_tree():
         grand_parent = get_grand_parent(obj_handle)
         # print('CALLING DOWNWARD TREE PASS FOR: ', grand_parent.name)
         downward_tree_pass(grand_parent, _heirarchial_bodies_list, _added_bodies_list)
-
-    
 
     return _heirarchial_bodies_list
 
@@ -1755,10 +1752,11 @@ class AMBF_OT_generate_ambf_file(Operator):
 
         # Convert the Euler rotation to a rotation matrix
         rot_matrix = world_rot.to_matrix().to_4x4()
+        print(rot_matrix)
 
         # Define the default forward, right, and up vectors
-
         track_axis = camera_obj_handle.constraints.data.track_axis
+        print(f"Track Axis: {track_axis}")
 
         coef = 1
         if "NEG" in track_axis:
@@ -1772,13 +1770,16 @@ class AMBF_OT_generate_ambf_file(Operator):
             forward0 = coef * mathutils.Vector((0, 0, 1))
 
         up_axis = camera_obj_handle.constraints.data.up_axis  
+        print(f"Up Axis: {up_axis}")
 
         if "X" in up_axis:
-            up0 = mathutils.Vector((1, 0, 0))
+            up0 = coef * mathutils.Vector((1, 0, 0))
         elif "Y" in up_axis:
-            up0 = mathutils.Vector((0, 1, 0))
+            up0 = coef * mathutils.Vector((0, 1, 0))
         elif "Z" in up_axis:
-            up0 = mathutils.Vector((0, 0, 1))     
+            up0 = coef * mathutils.Vector((0, 0, 1))     
+
+        print(forward0, up0)
 
         right0 = forward0.cross(up0)
 
@@ -1787,7 +1788,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         right = rot_matrix @ right0
         up = rot_matrix @ up0        
 
-        look_at = world_pos - forward
+        look_at = world_pos + forward
         right = rot_matrix @ right0
         up = forward.cross(right).normalized()
 
@@ -4519,11 +4520,6 @@ class AMBF_PT_ambf_camera(Panel):
             layout.separator()
 
             col = layout.column()
-            col.prop(context.object, 'ambf_object_visible', toggle=False)
-
-            layout.separator()
-
-            col = layout.column()
             col.prop(context.object.data, 'angle')
             
             col = layout.column()
@@ -4659,245 +4655,242 @@ class AMBF_PT_ambf_sensor(Panel):
         row.alignment = 'EXPAND'
         row.prop(context.object, 'ambf_object_visible_size')
 
-import bpy
-from bpy.types import Panel
+# class AMBF_PT_ambf_soft_body(Panel):
+#     """Add Soft Body Properties"""
+#     bl_label = "AMBF SOFT BODY PROPERTIES"
+#     bl_idname = "AMBF_PT_ambf_soft_body"
+#     bl_space_type = 'PROPERTIES'
+#     bl_region_type = 'WINDOW'
+#     bl_context = "physics"
 
-class AMBF_PT_ambf_soft_body(Panel):
-    """Add Soft Body Properties"""
-    bl_label = "AMBF SOFT BODY PROPERTIES"
-    bl_idname = "AMBF_PT_ambf_soft_body"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "physics"
-
-    @classmethod
-    def poll(cls, context):
-        active = False
-        active_obj_handle = context.object
-        if active_obj_handle: # Check if an obj_handle is active
-            if active_obj_handle.type == 'MESH':
-                active = True
-        return active
+#     @classmethod
+#     def poll(cls, context):
+#         active = False
+#         active_obj_handle = context.object
+#         if active_obj_handle: # Check if an obj_handle is active
+#             if active_obj_handle.type == 'MESH':
+#                 active = True
+#         return active
     
-    def draw(self, context):
-        layout = self.layout
-        obj = context.object
-        soft_body_props = context.scene.soft_body_properties
+#     def draw(self, context):
+#         layout = self.layout
+#         obj = context.object
+#         soft_body_props = context.scene.soft_body_properties
 
-        row = layout.row()
-        row.alignment = 'EXPAND'
-        row.operator('ambf.ambf_soft_body_activate', text='Enable AMBF Soft Body', icon='RNA_ADD')
-        row.scale_y = 2
+#         row = layout.row()
+#         row.alignment = 'EXPAND'
+#         row.operator('ambf.ambf_soft_body_activate', text='Enable AMBF Soft Body', icon='RNA_ADD')
+#         row.scale_y = 2
         
-        # Name property
-        row = layout.row()
-        row.prop(obj, 'name')
+#         # Name property
+#         row = layout.row()
+#         row.prop(obj, 'name')
 
-        # Collision Mesh Type property
-        row = layout.row()
-        row.prop(obj, 'ambf_collision_mesh_type')
+#         # Collision Mesh Type property
+#         row = layout.row()
+#         row.prop(obj, 'ambf_collision_mesh_type')
 
-        # Use Separate Collision Mesh property
-        row = layout.row()
-        row.prop(obj, 'ambf_use_separate_collision_mesh')
+#         # Use Separate Collision Mesh property
+#         row = layout.row()
+#         row.prop(obj, 'ambf_use_separate_collision_mesh')
 
-        # Collision Margin Enable property
-        row = layout.row()
-        row.prop(obj, 'ambf_collision_margin_enable')
+#         # Collision Margin Enable property
+#         row = layout.row()
+#         row.prop(obj, 'ambf_collision_margin_enable')
 
-        # Collision Margin property
-        row = layout.row()
-        row.prop(obj, 'ambf_collision_margin')
+#         # Collision Margin property
+#         row = layout.row()
+#         row.prop(obj, 'ambf_collision_margin')
 
-        # Collision Groups property
-        row = layout.row()
-        row.prop(obj, 'ambf_collision_groups')
+#         # Collision Groups property
+#         row = layout.row()
+#         row.prop(obj, 'ambf_collision_groups')
         
-        # Collision Shape property
-        row = layout.row()
-        row.prop(obj, 'ambf_collision_shape')
+#         # Collision Shape property
+#         row = layout.row()
+#         row.prop(obj, 'ambf_collision_shape')
 
-        # Collision Show Shapes property
-        row = layout.row()
-        row.prop(obj, 'ambf_collision_show_shapes_per_object')
+#         # Collision Show Shapes property
+#         row = layout.row()
+#         row.prop(obj, 'ambf_collision_show_shapes_per_object')
 
-        # Soft Body Properties
-        row = layout.row()
-        row.prop(soft_body_props, 'damping')
-        if soft_body_props.damping:
-            row = layout.row()
-            row.prop(soft_body_props, 'linear_damping')
+#         # Soft Body Properties
+#         row = layout.row()
+#         row.prop(soft_body_props, 'damping')
+#         if soft_body_props.damping:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'linear_damping')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_linear_stiffness')
-        if soft_body_props.enable_linear_stiffness:
-            row = layout.row()
-            row.prop(soft_body_props, 'linear_stiffness')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_linear_stiffness')
+#         if soft_body_props.enable_linear_stiffness:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'linear_stiffness')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_angular_stiffness')
-        if soft_body_props.enable_angular_stiffness:
-            row = layout.row()
-            row.prop(soft_body_props, 'angular_stiffness')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_angular_stiffness')
+#         if soft_body_props.enable_angular_stiffness:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'angular_stiffness')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_volume_stiffness')
-        if soft_body_props.enable_volume_stiffness:
-            row = layout.row()
-            row.prop(soft_body_props, 'volume_stiffness')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_volume_stiffness')
+#         if soft_body_props.enable_volume_stiffness:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'volume_stiffness')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_volume_constraint_force')
-        if soft_body_props.enable_volume_constraint_force:
-            row = layout.row()
-            row.prop(soft_body_props, 'volume_constraint_force')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_volume_constraint_force')
+#         if soft_body_props.enable_volume_constraint_force:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'volume_constraint_force')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_pressure')
-        if soft_body_props.enable_pressure:
-            row = layout.row()
-            row.prop(soft_body_props, 'pressure')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_pressure')
+#         if soft_body_props.enable_pressure:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'pressure')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_volume_conservation')
-        if soft_body_props.enable_volume_conservation:
-            row = layout.row()
-            row.prop(soft_body_props, 'volume_conservation')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_volume_conservation')
+#         if soft_body_props.enable_volume_conservation:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'volume_conservation')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_dynamic_friction')
-        if soft_body_props.enable_dynamic_friction:
-            row = layout.row()
-            row.prop(soft_body_props, 'dynamic_friction')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_dynamic_friction')
+#         if soft_body_props.enable_dynamic_friction:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'dynamic_friction')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_mass_thickness')
-        if soft_body_props.enable_mass_thickness:
-            row = layout.row()
-            row.prop(soft_body_props, 'mass_thickness')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_mass_thickness')
+#         if soft_body_props.enable_mass_thickness:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'mass_thickness')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_collision_hardness')
-        if soft_body_props.enable_collision_hardness:
-            row = layout.row()
-            row.prop(soft_body_props, 'collision_hardness')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_collision_hardness')
+#         if soft_body_props.enable_collision_hardness:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'collision_hardness')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_kinematic_hardness')
-        if soft_body_props.enable_kinematic_hardness:
-            row = layout.row()
-            row.prop(soft_body_props, 'kinematic_hardness')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_kinematic_hardness')
+#         if soft_body_props.enable_kinematic_hardness:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'kinematic_hardness')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_shear_hardness')
-        if soft_body_props.enable_shear_hardness:
-            row = layout.row()
-            row.prop(soft_body_props, 'shear_hardness')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_shear_hardness')
+#         if soft_body_props.enable_shear_hardness:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'shear_hardness')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_aerodynamic_hardness')
-        if soft_body_props.enable_aerodynamic_hardness:
-            row = layout.row()
-            row.prop(soft_body_props, 'aerodynamic_hardness')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_aerodynamic_hardness')
+#         if soft_body_props.enable_aerodynamic_hardness:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'aerodynamic_hardness')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_self_collision_hardness_radius_clamped')
-        if soft_body_props.enable_self_collision_hardness_radius_clamped:
-            row = layout.row()
-            row.prop(soft_body_props, 'self_collision_hardness_radius_clamped')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_self_collision_hardness_radius_clamped')
+#         if soft_body_props.enable_self_collision_hardness_radius_clamped:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'self_collision_hardness_radius_clamped')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_self_kinematic_hardness_radius_clamped')
-        if soft_body_props.enable_self_kinematic_hardness_radius_clamped:
-            row = layout.row()
-            row.prop(soft_body_props, 'self_kinematic_hardness_radius_clamped')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_self_kinematic_hardness_radius_clamped')
+#         if soft_body_props.enable_self_kinematic_hardness_radius_clamped:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'self_kinematic_hardness_radius_clamped')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_self_shear_hardness_radius_clamped')
-        if soft_body_props.enable_self_shear_hardness_radius_clamped:
-            row = layout.row()
-            row.prop(soft_body_props, 'self_shear_hardness_radius_clamped')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_self_shear_hardness_radius_clamped')
+#         if soft_body_props.enable_self_shear_hardness_radius_clamped:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'self_shear_hardness_radius_clamped')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_self_collision_hardness_split_clamped')
-        if soft_body_props.enable_self_collision_hardness_split_clamped:
-            row = layout.row()
-            row.prop(soft_body_props, 'self_collision_hardness_split_clamped')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_self_collision_hardness_split_clamped')
+#         if soft_body_props.enable_self_collision_hardness_split_clamped:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'self_collision_hardness_split_clamped')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_self_kinematic_hardness_split_clamped')
-        if soft_body_props.enable_self_kinematic_hardness_split_clamped:
-            row = layout.row()
-            row.prop(soft_body_props, 'self_kinematic_hardness_split_clamped')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_self_kinematic_hardness_split_clamped')
+#         if soft_body_props.enable_self_kinematic_hardness_split_clamped:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'self_kinematic_hardness_split_clamped')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_self_shear_hardness_split_clamped')
-        if soft_body_props.enable_self_shear_hardness_split_clamped:
-            row = layout.row()
-            row.prop(soft_body_props, 'self_shear_hardness_split_clamped')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_self_shear_hardness_split_clamped')
+#         if soft_body_props.enable_self_shear_hardness_split_clamped:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'self_shear_hardness_split_clamped')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_max_volume')
-        if soft_body_props.enable_max_volume:
-            row = layout.row()
-            row.prop(soft_body_props, 'max_volume')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_max_volume')
+#         if soft_body_props.enable_max_volume:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'max_volume')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_time_scale')
-        if soft_body_props.enable_time_scale:
-            row = layout.row()
-            row.prop(soft_body_props, 'time_scale')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_time_scale')
+#         if soft_body_props.enable_time_scale:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'time_scale')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_velocity_iterations')
-        if soft_body_props.enable_velocity_iterations:
-            row = layout.row()
-            row.prop(soft_body_props, 'velocity_iterations')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_velocity_iterations')
+#         if soft_body_props.enable_velocity_iterations:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'velocity_iterations')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_position_iterations')
-        if soft_body_props.enable_position_iterations:
-            row = layout.row()
-            row.prop(soft_body_props, 'position_iterations')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_position_iterations')
+#         if soft_body_props.enable_position_iterations:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'position_iterations')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_damping_iterations')
-        if soft_body_props.enable_damping_iterations:
-            row = layout.row()
-            row.prop(soft_body_props, 'damping_iterations')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_damping_iterations')
+#         if soft_body_props.enable_damping_iterations:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'damping_iterations')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_constraint_iterations')
-        if soft_body_props.enable_constraint_iterations:
-            row = layout.row()
-            row.prop(soft_body_props, 'constraint_iterations')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_constraint_iterations')
+#         if soft_body_props.enable_constraint_iterations:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'constraint_iterations')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_flags')
-        if soft_body_props.enable_flags:
-            row = layout.row()
-            row.prop(soft_body_props, 'flags')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_flags')
+#         if soft_body_props.enable_flags:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'flags')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_bending_constraint')
-        if soft_body_props.enable_bending_constraint:
-            row = layout.row()
-            row.prop(soft_body_props, 'bending_constraint')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_bending_constraint')
+#         if soft_body_props.enable_bending_constraint:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'bending_constraint')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_cutting')
-        if soft_body_props.enable_cutting:
-            row = layout.row()
-            row.prop(soft_body_props, 'cutting')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_cutting')
+#         if soft_body_props.enable_cutting:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'cutting')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_clusters')
-        if soft_body_props.enable_clusters:
-            row = layout.row()
-            row.prop(soft_body_props, 'clusters')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_clusters')
+#         if soft_body_props.enable_clusters:
+#             row = layout.row()
+#             row.prop(soft_body_props, 'clusters')
         
-        row = layout.row()
-        row.prop(soft_body_props, 'enable_fixed_nodes')
+#         row = layout.row()
+#         row.prop(soft_body_props, 'enable_fixed_nodes')
 
 class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
     ambf_collision_shape_radius: FloatProperty \
@@ -5029,7 +5022,7 @@ custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
                   AMBF_PT_main_panel,
                   AMBF_PT_ambf_rigid_body,
                   AMBF_PT_ambf_ghost_object,
-                  AMBF_PT_ambf_soft_body,
+                #   AMBF_PT_ambf_soft_body,
                   AMBF_PT_ambf_constraint,
                   AMBF_PT_ambf_actuator,
                   AMBF_PT_ambf_sensor,
@@ -5406,10 +5399,6 @@ def register():
             default='VELOCITY',
             description='The output of the controller fed to the simulation. Better to use (VELOCITY) with P <= 10, D <= 1'
         )
-    
-    Object.ambf_camera_fov = FloatProperty(name="FOV", default=1.0, min=0.0)
-    Object.ambf_camera_near_clip = FloatProperty(name="Near", default=0.0)
-    Object.ambf_camera_far_clip = FloatProperty(name="Far", default=10.0)
 
     Scene.ambf_adf_path = StringProperty \
             (

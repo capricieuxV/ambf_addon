@@ -1,3 +1,24 @@
+# Author: Adnan Munawar
+# Email: amunawar@wpi.edu
+# Lab: aimlab.wpi.edu
+
+# Editor: Vanessa Wang
+# Email: swang368@jh.edu
+# Lab: LCSR, Johns Hopkins University
+
+bl_info = {
+    "name": "Asynchronous Multi-Body Framework (AMBF) Config Creator",
+    "author": "Adnan Munawar, Shiyue Vanessa Wang",
+    "version": (0, 1),
+    "blender": (4, 0, 0),
+    "location": "View3D > Add > Mesh > AMBF",
+    "description": "Helps Generate AMBF Config File and Saves both High and Low Resolution(Collision) Meshes",
+    "warning": "",
+    # "wiki_url": "https://github.com/WPI-AIM/ambf_addon",
+    "wiki_url": "https://github.com/capricieuxV/ambf__blender_addon",
+    "category": "AMBF",
+    }
+
 import bpy
 from bpy.props import StringProperty, BoolProperty, EnumProperty, FloatVectorProperty, CollectionProperty, PointerProperty
 from bpy.types import PropertyGroup, Operator, Panel
