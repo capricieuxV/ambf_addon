@@ -1,5 +1,5 @@
 bl_info = {
-    "name": "Collection Selector",
+    "name": "Collection Manager",
     "blender": (4, 0, 0),
     "category": "Object",
 }
@@ -32,11 +32,11 @@ bpy.types.Scene.active_collection_name = bpy.props.StringProperty(
 )
 
 class CollectionSelectorPanel(bpy.types.Panel):
-    bl_label = "Collection Selector"
+    bl_label = "Collection Manager"
     bl_idname = "OBJECT_PT_collection_selector"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "Collection Selector"
+    bl_category = "Collection Manager"
     
     def draw(self, context):
         layout = self.layout

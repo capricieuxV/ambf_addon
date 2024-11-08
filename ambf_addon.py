@@ -121,57 +121,69 @@ class CameraTemplate:
 class LightTemplate:
     def __init__(self):
         self._adf_data = OrderedDict()
-        # self._adf_data['namespace'] = ''
+        self._adf_data['namespace'] = ''
         self._adf_data['name'] = ''
         self._adf_data['location'] = get_pose_ordered_dict()
-        self._adf_data['color'] = ''
+        # self._adf_data['color'] = ''
         # self._adf_data['intensity'] = 0.0 
-        self._adf_data['type'] = 'POINT'
+        # self._adf_data['type'] = 'POINT'
         # self._adf_data['spot'] = {'angle': 0.0, 'blend': 0.0}
         self._adf_data['direction'] = get_xyz_ordered_dict()
         # self._adf_data['distance'] = 0.0
         # self._adf_data['decay'] = 0.0
-        # self._adf_data['spot exponent'] = 1.0
-        # self._adf_data['shadow quality'] = 1.0
-        # self._adf_data['cutoff angle'] = 1.0
-        self._adf_data['visible'] = False
+        self._adf_data['spot exponent'] = 1.0
+        self._adf_data['shadow quality'] = 1.0
+        self._adf_data['cutoff angle'] = 1.0
         # self._adf_data['parent'] = ''
-        # self._adf_data['publish image'] = False
-        # self._adf_data['publish image interval'] = 0
-        # self._adf_data['publish image resolution'] = {'width': 0.0, 'height': 0.0}
-        # self._adf_data['publish depth'] = False
-        # self._adf_data['publish depth interval'] = 0
-        # self._adf_data['publish depth resolution'] = {'width': 0.0, 'height': 0.0}
-        # self._adf_data['publish depth noise'] = {'enable': False, 'mean': 0.0, 'std_dev': 0.0, 'bias': 0.0}
+        # self._adf_data['attenuation'] = get_xyz_ordered_dict() 
 
 class SensorTemplate:
-    def __init__(self):
-        self.adf_data = OrderedDict()
-        self.adf_data['name'] = ''
-        self.adf_data['namespace'] = ''
-        self.adf_data['type'] = 'Proximity'
-        self.adf_data['parent'] = ''
-        self.adf_data['location'] = get_pose_ordered_dict
-        self.adf_data['location']['position'] = get_xyz_ordered_dict()
-        self.adf_data['location']['orientation'] = get_rpy_ordered_dict()
-        self.adf_data['publish frequency'] = 0.0
+    def __init__(self, sensor_type="Proximity", publish_frequency=None):
+        self._adf_data = OrderedDict()
+        self._adf_data['name'] = ''
+        self._adf_data['type'] = sensor_type
+        self._adf_data['parent'] = ''
+        self._adf_data['location'] = get_pose_ordered_dict()
+        self._adf_data['location']['position'] = get_xyz_ordered_dict()  
+        self._adf_data['location']['orientation'] = get_rpy_ordered_dict() 
+        if publish_frequency is not None:
+            self._adf_data['publish frequency'] = publish_frequency
+        self._adf_data['visible'] = False
+        self._adf_data['visible size'] = 1.0
+        
+        if sensor_type == "Proximity":
+            self._adf_data['range'] = 0.1
+            self._adf_data['array'] = []  
+
+        elif sensor_type == "Resistance":
+            self._adf_data.update({
+                'friction': {'static': 0.0, 'damping': 0.0, 'dynamic': 0.0, 'variable': False},
+                'contact area': 0.0,
+                'contact stiffness': 0.0,
+                'contact damping': 0.0
+            })
+
+        elif sensor_type == "Contact":
+            self._adf_data.update({
+                'distance threshold': 0.0,
+                'process contact details': False
+            })
 
 class ActuatorTemplate:
     def __init__(self):
-        self.adf_data = OrderedDict()
-        self.adf_data['name'] = ''
-        self.adf_data['namespace'] = ''
-        self.adf_data['type'] = 'Constriant'
-        self.adf_data['parent'] = ''
-        self.adf_data['location'] = get_pose_ordered_dict
-        self.adf_data['location']['position'] = get_xyz_ordered_dict()
-        self.adf_data['location']['orientation'] = get_rpy_ordered_dict()
-        self.adf_data['parent'] = ''
-        self.adf_data['visible'] = False
-        self.adf_data['visible size'] = 0.0
-        # self.adf_data['publish frequency'] = 0.0
-        # self.adf_data['max impulse'] = 0.0
-        # self.adf_data['tau'] = 0.0
+        self._adf_data = OrderedDict()
+        self._adf_data['name'] = ''
+        # self._adf_data['namespace'] = ''
+        self._adf_data['type'] = 'Constraint'
+        self._adf_data['parent'] = ''
+        self._adf_data['location'] = get_pose_ordered_dict()  
+        self._adf_data['location']['position'] = get_xyz_ordered_dict()  
+        self._adf_data['location']['orientation'] = get_rpy_ordered_dict() 
+        self._adf_data['visible'] = False
+        self._adf_data['visible size'] = 1.0
+        # self._adf_data['publish frequency'] = 0.0
+        # self._adf_data['max impulse'] = 0.0
+        # self._adf_data['tau'] = 0.0
 
 class SoftBodyTemplate:
     def __init__(self):
@@ -463,6 +475,16 @@ def update_selected_collections(self, context):
         else:
             collection.hide_viewport = True
 
+# Hook to ensure new objects are added to the active collection
+def ensure_active_collection(scene):
+    if scene.active_collection_name:
+        active_collection = bpy.data.collections.get(scene.active_collection_name)
+        if active_collection:
+            for obj in bpy.context.selected_objects:
+                for col in obj.users_collection:
+                    col.objects.unlink(obj)
+                active_collection.objects.link(obj)
+
 bpy.types.Scene.selected_collections = bpy.props.StringProperty(
     name="Selected Collections",
     description="Comma-separated list of selected collection names",
@@ -494,7 +516,6 @@ def hide_object(object, hide):
         # object.hide = hide
         object.hide_set(hide)
 
-
 def is_object_hidden(object):
     if object:
         # hidden = object.hide
@@ -516,7 +537,6 @@ def set_active_object(active_object):
 
 def get_selected_objects():
     return bpy.context.selected_objects
-
 
 def make_obj1_parent_of_obj2(obj1, obj2):
     select_all_objects(False)
@@ -1287,7 +1307,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         self.generate_adf()
         return {'FINISHED'}
 
-    # This joint adds the body prefix str if set to all the bodies in the AMBF
+    # This joint adds the body prefix str if set to all the bodies(rigid, ghost, soft) in the AMBF
     def add_body_prefix_str(self, urdf_body_str):
         return self.body_name_prefix + urdf_body_str
 
@@ -1683,8 +1703,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         adf_data[joint_yaml_name] = joint_data
         self._joint_names_list.append(joint_yaml_name)
     
-    def generate_actuator_data_from_ambf_constriant(self, adf_data, actuator_obj_handle):
-        print("\nIn generate_actuator_data_from_ambf_constriant")
+    def generate_actuator_data_from_ambf_actuator(self, adf_data, actuator_obj_handle):
         if actuator_obj_handle.ambf_object_type != 'ACTUATOR':
             return
 
@@ -1695,26 +1714,27 @@ class AMBF_OT_generate_ambf_file(Operator):
         if is_object_hidden(actuator_obj_handle) is True:
             return
         
-        actuator = ActuatorTemplate()
-        actuator_data = actuator._adf_data
+        print("Generating Actuator: ", actuator_obj_handle.name)
+
+        actuator_template = ActuatorTemplate()
+        actuator_data = actuator_template._adf_data  # Correct reference to actuator_data
 
         if not compare_namespace_with_global(actuator_obj_handle.name):
             if get_namespace(actuator_obj_handle.name) != '':
-                actuator_obj_handle['namespace'] = get_namespace(actuator_obj_handle.name)
+                actuator_data['namespace'] = get_namespace(actuator_obj_handle.name)
         
-        actuator_data = {}
         actuator_obj_handle_name = remove_namespace_prefix(actuator_obj_handle.name)
         actuarator_yaml_name = self.add_actuator_prefix_str(actuator_obj_handle_name)
         actuator_data['name'] = actuator_obj_handle_name
-        actuator_data['type'] = actuator_obj_handle.type
-        actuator_data['location']['position'] = {}
 
-        parent_obj_handle = actuator_obj_handle.ambf_object_parent
-        parent_obj_handle_name = remove_namespace_prefix(parent_obj_handle.name)
-        actuator_data['parent'] = self.add_body_prefix_str(parent_obj_handle_name)
-        actuator_data['visible'] = actuator_obj_handle.ambf_object_visible
-        actuator_data['visible size'] = actuator_obj_handle.ambf_object_visible_size
+        # Ensure `location` and its sub-keys are properly set up before assigning values
+        if 'location' not in actuator_data:
+            actuator_data['location'] = OrderedDict({
+                'position': OrderedDict(),
+                'orientation': OrderedDict()
+            })
 
+        # Populate position and orientation under location
         world_pos = actuator_obj_handle.matrix_world.translation
         world_rot = actuator_obj_handle.matrix_world.to_euler()
         actuator_data['location']['position']['x'] = ambf_round(world_pos.x)
@@ -1723,7 +1743,98 @@ class AMBF_OT_generate_ambf_file(Operator):
         actuator_data['location']['orientation']['r'] = ambf_round(world_rot[0])
         actuator_data['location']['orientation']['p'] = ambf_round(world_rot[1])
         actuator_data['location']['orientation']['y'] = ambf_round(world_rot[2])
-        
+
+        # Set additional properties
+        parent_obj_handle = actuator_obj_handle.ambf_object_parent
+        parent_obj_handle_name = remove_namespace_prefix(parent_obj_handle.name)
+        actuator_data['parent'] = self.add_body_prefix_str(parent_obj_handle_name)
+        actuator_data['visible'] = actuator_obj_handle.ambf_object_visible
+        actuator_data['visible size'] = actuator_obj_handle.ambf_object_visible_size
+
+        # Add to final data and list
+        self._actuator_names_list.append(actuarator_yaml_name)
+        adf_data[actuarator_yaml_name] = actuator_data
+
+    def generate_sensor_data_from_ambf_sensor(self, adf_data, sensor_obj_handle):
+        if sensor_obj_handle.ambf_object_type != 'SENSOR':
+            return
+
+        # Check if the object is unlinked or hidden in the scene
+        if self._context.scene.objects.get(sensor_obj_handle.name) is None or is_object_hidden(sensor_obj_handle):
+            return
+
+        print("Generating Sensor: ", sensor_obj_handle.name)
+
+        # Create a SensorTemplate instance with the sensor type and frequency
+        sensor_type = sensor_obj_handle.ambf_sensor_type
+        # TODO: Deal with sensor frequency in the future
+        # freq = sensor_obj_handle.ambf_sensor_frequency 
+        freq = None
+        sensor_template = SensorTemplate(sensor_type, freq)
+
+        sensor_data = sensor_template._adf_data
+
+        # Set namespace if available
+        if not compare_namespace_with_global(sensor_obj_handle.name):
+            namespace = get_namespace(sensor_obj_handle.name)
+            if namespace:
+                sensor_data['namespace'] = namespace
+
+        # Set the sensor's name and prepare for YAML structure
+        sensor_obj_handle_name = remove_namespace_prefix(sensor_obj_handle.name)
+        sensor_yaml_name = self.add_sensor_prefix_str(sensor_obj_handle_name)
+        sensor_data['name'] = sensor_obj_handle_name
+
+        # Define location with position and orientation
+        world_pos = sensor_obj_handle.matrix_world.translation
+        world_rot = sensor_obj_handle.matrix_world.to_euler()
+        sensor_data['location'] = {
+            'position': {
+                'x': ambf_round(world_pos.x),
+                'y': ambf_round(world_pos.y),
+                'z': ambf_round(world_pos.z)
+            },
+            'orientation': {
+                'r': ambf_round(world_rot[0]),
+                'p': ambf_round(world_rot[1]),
+                'y': ambf_round(world_rot[2])
+            }
+        }
+
+        # Set common attributes
+        sensor_data['visible'] = sensor_obj_handle.ambf_object_visible
+        sensor_data['visible size'] = sensor_obj_handle.ambf_object_visible_size
+
+        # Add specific attributes based on the sensor type
+        if sensor_type == 'Proximity':
+            sensor_data['range'] = sensor_obj_handle.ambf_sensor_range
+            sensor_data['array'] = [
+                {
+                    'offset': {'x': ambf_round(item.offset[0]), 'y': ambf_round(item.offset[1]), 'z': ambf_round(item.offset[2])},
+                    'direction': {'x': ambf_round(item.direction[0]), 'y': ambf_round(item.direction[1]), 'z': ambf_round(item.direction[2])}
+                }
+                for item in sensor_obj_handle.ambf_sensor_properties.ambf_sensor_array
+            ]
+
+        elif sensor_type == 'Resistance':
+            sensor_data['friction'] = {
+                'static': sensor_obj_handle.ambf_sensor_friction_static,
+                'damping': sensor_obj_handle.ambf_sensor_friction_damping,
+                'dynamic': sensor_obj_handle.ambf_sensor_friction_dynamic,
+                'variable': sensor_obj_handle.ambf_sensor_friction_variable
+            }
+            sensor_data['contact area'] = sensor_obj_handle.ambf_sensor_contact_area
+            sensor_data['contact stiffness'] = sensor_obj_handle.ambf_sensor_contact_stiffness
+            sensor_data['contact damping'] = sensor_obj_handle.ambf_sensor_contact_damping
+
+        elif sensor_type == 'Contact':
+            sensor_data['distance threshold'] = sensor_obj_handle.ambf_sensor_distance_threshold
+            sensor_data['process contact details'] = sensor_obj_handle.ambf_sensor_process_contact_details
+
+        # Add the sensor to the list and dictionary for the ADF structure
+        self._sensor_names_list.append(sensor_yaml_name)
+        adf_data[sensor_yaml_name] = sensor_data
+    
     def generate_camera_data_from_ambf_camera(self, adf_data, camera_obj_handle):
         if camera_obj_handle.ambf_object_type != 'CAMERA':
             return
@@ -1752,11 +1863,11 @@ class AMBF_OT_generate_ambf_file(Operator):
 
         # Convert the Euler rotation to a rotation matrix
         rot_matrix = world_rot.to_matrix().to_4x4()
-        print(rot_matrix)
+        # print(rot_matrix)
 
         # Define the default forward, right, and up vectors
         track_axis = camera_obj_handle.constraints.data.track_axis
-        print(f"Track Axis: {track_axis}")
+        # print(f"Track Axis: {track_axis}")
 
         coef = 1
         if "NEG" in track_axis:
@@ -1770,7 +1881,7 @@ class AMBF_OT_generate_ambf_file(Operator):
             forward0 = coef * mathutils.Vector((0, 0, 1))
 
         up_axis = camera_obj_handle.constraints.data.up_axis  
-        print(f"Up Axis: {up_axis}")
+        # print(f"Up Axis: {up_axis}")
 
         if "X" in up_axis:
             up0 = coef * mathutils.Vector((1, 0, 0))
@@ -1820,17 +1931,14 @@ class AMBF_OT_generate_ambf_file(Operator):
         light_data = light_template._adf_data
 
         if not compare_namespace_with_global(light_obj_handle.name):
-            if get_namespace(light_obj_handle.name) != '':
+            if get_namespace(light_obj_handle.name) == '':
+                light_data['namespace'] = light_obj_handle.ambf_light_namespace
+            else:
                 light_data['namespace'] = get_namespace(light_obj_handle.name)
 
         light_obj_handle_name = remove_namespace_prefix(light_obj_handle.name)        
         light_data['name'] = light_obj_handle_name
-        light_data['type'] = light_obj_handle.data.type
-        light_data['color'] = {'r': ambf_round(light_obj_handle.data.color[0]),
-                               'g': ambf_round(light_obj_handle.data.color[1]),
-                               'b': ambf_round(light_obj_handle.data.color[2])}
-        light_data['energy'] = ambf_round(light_obj_handle.data.energy)
-        light_data['visible'] = light_obj_handle.ambf_object_visible
+        # light_data['parent'] = light_obj_handle.ambf_object_parent
 
         # Get light position and orientation
         world_pos = light_obj_handle.matrix_world.translation
@@ -1838,6 +1946,11 @@ class AMBF_OT_generate_ambf_file(Operator):
 
         light_data['location'] = {'x': ambf_round(world_pos.x), 'y': ambf_round(world_pos.y), 'z': ambf_round(world_pos.z)}
         light_data['direction'] = {'x': ambf_round(world_rot[0]), 'y': ambf_round(world_rot[1]), 'z': ambf_round(world_rot[2])}
+
+        light_data['spot exponent'] = light_obj_handle.ambf_light_spot_exponent
+        light_data['shadow quality'] = light_obj_handle.ambf_light_shadow_quality
+        light_data['cutoff angle'] = light_obj_handle.ambf_light_cutoff_angle
+        # light_data['attenuation'] = light_obj_handle.ambf_light_constant_attenuation #TODO: Add attenuation (linear, quadratic)
 
         light_yaml_name = self.add_light_prefix_str(light_data['name'])
         adf_data[light_yaml_name] = light_data
@@ -2074,16 +2187,16 @@ class AMBF_OT_generate_ambf_file(Operator):
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
             self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
             self.generate_light_data_from_ambf_light(self._adf, obj_handle)
-            # self.generate_sensor_data_from_ambf_sensor(self._adf, obj_handle)
-            # self.generate_actuator_data_from_ambf_actuator(self._adf, obj_handle)
+            self.generate_sensor_data_from_ambf_sensor(self._adf, obj_handle)
+            self.generate_actuator_data_from_ambf_actuator(self._adf, obj_handle)
 
         # Now populate the tags
         self._adf['bodies'] = self._body_names_list
         self._adf['joints'] = self._joint_names_list
         self._adf['cameras'] = self._camera_names_list
         self._adf['lights'] = self._light_names_list
-        # self._adf['sensors'] = self._sensor_names_list
-        # self._adf['actuators'] = self._actuator_names_list
+        self._adf['sensors'] = self._sensor_names_list
+        self._adf['actuators'] = self._actuator_names_list
         
         yaml.dump(self._adf, output_file)
 
@@ -2244,7 +2357,6 @@ class AMBF_OT_save_meshes(Operator):#
         print("###### Done Reselecting Saving Objects ######")
 
 
-
 class AMBF_OT_generate_low_res_mesh_modifiers(Operator):
     bl_idname = "ambf.generate_low_res_mesh_modifiers"
     bl_label = "Generate Low-Res Meshes"
@@ -2286,6 +2398,7 @@ class AMBF_OT_create_joint(Operator):
         bpy.ops.object.empty_add(type='PLAIN_AXES')
         active_obj_handle = get_active_object()
         active_obj_handle.name = 'joint'
+        active_obj_handle.ambf_object_type = 'CONSTRAINT'
         return {'FINISHED CREATING JOINT'}
     
 class AMBF_OT_create_sensor(Operator):
@@ -2300,21 +2413,61 @@ class AMBF_OT_create_sensor(Operator):
         bpy.ops.object.empty_add(type='SPHERE')
         active_obj_handle = get_active_object()
         active_obj_handle.name = 'sensor'
-        return {'FINISHED CREATING ACTUATOR'}
+        active_obj_handle.ambf_object_type = 'SENSOR'
+        return {'FINISHED'}
+    
+class AMBF_OT_add_sensor_array_item(Operator):
+    bl_idname = "ambf.add_sensor_array_item"
+    bl_label = "Add Sensor Array Item"
+
+    def execute(self, context):
+        obj = context.object
+
+        # Check if the object has the 'ambf_sensor_array' collection property
+        if not hasattr(obj, 'ambf_sensor_array'):
+            self.report({'ERROR'}, "The object doesn't have an ambf_sensor_array property.")
+            return {'CANCELLED'}
+
+        new_item = obj.ambf_sensor_properties.ambf_sensor_array.add()
+        new_item.offset = (0.0, 0.0, 0.0)
+        new_item.direction = (0.0, -1.0, 0.0)
+
+        return {'FINISHED'}
+    
+class AMBF_OT_remove_sensor_array_item(Operator):
+    bl_idname = "ambf.remove_sensor_array_item"
+    bl_label = "Remove Sensor Array Item"
+
+    index: IntProperty(default=0)
+
+    def execute(self, context):
+        obj = context.object
+
+        # Check if the object has the 'ambf_sensor_array' collection property
+        if not hasattr(obj, 'ambf_sensor_array'):
+            self.report({'ERROR'}, "The object doesn't have an ambf_sensor_array property.")
+            return {'CANCELLED'}
+
+        obj.ambf_sensor_properties.ambf_sensor_array.remove(self.index)
+
+        return {'FINISHED'}
     
 class AMBF_OT_create_actuator(Operator):
     bl_idname = "ambf.create_actuator"
     bl_label = "Create Actuator"
-    bl_description = "This creates an empty object that can be used to create closed loop mechanisms. Make" \
-                     " sure to set the rigid body constraint (RBC) for this empty mesh and ideally parent this empty" \
-                     " object with the parent body of its RBC"
+    bl_description = (
+        "This creates an empty object that can be used to create closed loop mechanisms. Make"
+        " sure to set the rigid body constraint (RBC) for this empty mesh and ideally parent this empty"
+        " object with the parent body of its RBC"
+    )
 
     def execute(self, context):
         select_all_objects(False)
         bpy.ops.object.empty_add(type='SPHERE')
         active_obj_handle = get_active_object()
         active_obj_handle.name = 'actuator'
-        return {'FINISHED CREATING ACTUATOR'}
+        active_obj_handle.ambf_object_type = 'ACTUATOR'
+        return {'FINISHED'} 
 
 
 class AMBF_OT_remove_low_res_mesh_modifiers(Operator):
@@ -2614,27 +2767,233 @@ class AMBF_OT_load_ambf_file(Operator):
         # Create a new object with the camera data
         camera_object = bpy.data.objects.new(camera_name, camera)
         camera_object.ambf_object_type = 'CAMERA'
-        camera_object.matrix_world.translation = mathutils.Vector((camera_data['location']['x'], camera_data['location']['y'], camera_data['location']['z']))
         
-        # Point the camera by setting its rotation
-        look_at = mathutils.Vector((camera_data['look at']['x'], camera_data['look at']['y'], camera_data['look at']['z']))
-        up = mathutils.Vector((camera_data['up']['x'], camera_data['up']['y'], camera_data['up']['z']))
+        # Set the camera's location
+        location_vec = mathutils.Vector((
+            camera_data['location']['x'], 
+            camera_data['location']['y'], 
+            camera_data['location']['z']
+        ))
 
-        forward = -(look_at - camera_object.matrix_world.translation).normalized()
-        right = up.cross(forward).normalized()
-        up = forward.cross(right)
+        camera_object.location = location_vec
+        
+        # Calculate the forward, right, and up vectors in world coordinates
+        look_at_vec = mathutils.Vector((
+            camera_data['look at']['x'], 
+            camera_data['look at']['y'], 
+            camera_data['look at']['z']
+        ))
 
-        rotation_matrix = mathutils.Matrix((right, up, forward)).transposed()
-        camera_object.rotation_euler = rotation_matrix.to_euler()
-
+        up_world = mathutils.Vector((
+            camera_data['up']['x'], 
+            camera_data['up']['y'], 
+            camera_data['up']['z']
+        )).normalized()
+        
+        # Forward vector from the camera to the look-at point
+        forward_world = (look_at_vec - location_vec).normalized()
+        
+        # Right vector as the cross product of forward and up
+        right_world = forward_world.cross(up_world).normalized()
+        
+        # Recompute the up vector as cross product of right and forward to ensure orthogonality
+        up_world = right_world.cross(forward_world).normalized()
+        
+        # Retrieve track_axis and up_axis from camera_data (you need to store these during generation)
+        track_axis = 'NEG_Z'
+        up_axis = 'NEG_Y'
+        
+        coef = -1 if "NEG" in track_axis else 1
+        
+        # Define the default forward0 vector based on track_axis
+        if "X" in track_axis:
+            forward0 = coef * mathutils.Vector((1, 0, 0))
+        elif "Y" in track_axis:
+            forward0 = coef * mathutils.Vector((0, 1, 0))
+        elif "Z" in track_axis:
+            forward0 = coef * mathutils.Vector((0, 0, 1))
+        else:
+            forward0 = coef * mathutils.Vector((0, 0, 1)) 
+        
+        # Define the default up0 vector based on up_axis
+        if "X" in up_axis:
+            up0 = mathutils.Vector((1, 0, 0))
+        elif "Y" in up_axis:
+            up0 = mathutils.Vector((0, 1, 0))
+        elif "Z" in up_axis:
+            up0 = mathutils.Vector((0, 0, 1))
+        else:
+            up0 = mathutils.Vector((0, 1, 0))  
+        
+        # Compute the local right0 vector
+        right0 = forward0.cross(up0).normalized()
+        
+        # Build the local axes matrix (columns are right0, up0, forward0)
+        M_local = mathutils.Matrix((right0, up0, forward0)).transposed()
+        
+        # Build the world axes matrix (columns are right_world, up_world, forward_world)
+        M_world = mathutils.Matrix((right_world, up_world, forward_world)).transposed()
+        
+        # Compute the rotation matrix that aligns the local axes to the world axes
+        rot_matrix = M_world @ M_local.inverted() #TODO: This is not correct, need to fix
+        
+        # Apply the rotation matrix to the camera object
+        camera_object.matrix_world = mathutils.Matrix.Translation(location_vec) @ rot_matrix.to_4x4()
+        
         # Link the camera object to the current scene
         scene = bpy.context.scene
         scene.collection.objects.link(camera_object)
         
-        # Set the camera as the active camera for the scene
+        # Optionally set the camera as the active camera for the scene
         scene.camera = camera_object
 
         return camera_object
+    
+    def load_ambf_light(self, light_data):
+        light_name = light_data['name']
+        
+        # Create a new light data block
+        light = bpy.data.lights.new(name=light_name, type='SPOT')
+                
+        # Create a new light object with the light data
+        light_object = bpy.data.objects.new(light_name, light)
+        light_object.ambf_object_type = 'LIGHT'
+
+        light_object.ambf_light_cutoff_angle = light_data['cutoff angle']  
+        light_object.ambf_light_spot_exponent = light_data['spot exponent']  
+        light_object.ambf_light_shadow_quality = light_data['shadow quality'] 
+        # light_object.energy = light_data.get('attenuation', 1.0)  # TODO: Placeholder for future attenuation 
+ 
+        # Set the position and rotation of the light
+        light_object.location = (
+            light_data['location']['x'],
+            light_data['location']['y'],
+            light_data['location']['z']
+        )
+        
+        # Set rotation from direction in `light_data`
+        light_object.rotation_euler = (
+            light_data['direction']['x'],
+            light_data['direction']['y'],
+            light_data['direction']['z']
+        )
+
+        # Set the namespace if provided
+        if 'namespace' in light_data:
+            light_object.ambf_light_namespace = light_data['namespace']
+
+        # Link the light object to the current scene
+        scene = bpy.context.scene
+        scene.collection.objects.link(light_object)
+
+        return light_object
+
+    def load_ambf_actuator(self, actuator_data):
+        actuator_name = actuator_data['name']
+        
+        actuator = bpy.data.objects.new(name=actuator_name, object_data=None)
+        actuator.empty_display_type = 'SPHERE' 
+        actuator.ambf_object_type = 'ACTUATOR'
+
+        actuator.location = (
+            actuator_data['location']['position']['x'],
+            actuator_data['location']['position']['y'],
+            actuator_data['location']['position']['z']
+        )
+
+        actuator.rotation_euler = (
+            actuator_data['location']['orientation']['r'],
+            actuator_data['location']['orientation']['p'],
+            actuator_data['location']['orientation']['y']
+        )
+
+        # if 'namespace' in actuator_data:
+        #     actuator.ambf_actuator_namespace = actuator_data['namespace']
+        if 'parent' in actuator_data:
+            parent_obj_handle = bpy.data.objects[actuator_data['parent']]
+            actuator.ambf_object_parent = parent_obj_handle
+        if 'visible' in actuator_data:
+            actuator.ambf_object_visible = actuator_data['visible']
+        if 'visible size' in actuator_data:
+            actuator.ambf_object_visible_size = actuator_data['visible size']
+
+        scene = bpy.context.scene
+        scene.collection.objects.link(actuator)
+
+        return actuator
+    
+    def load_ambf_sensor(self, sensor_data):
+        sensor_name = sensor_data['name']
+        
+        # Create a new sensor object
+        sensor = bpy.data.objects.new(name=sensor_name, object_data=None)
+        sensor.empty_display_type = 'SPHERE' 
+        sensor.ambf_object_type = 'SENSOR'
+
+        # Set location and rotation
+        sensor.location = (
+            sensor_data['location']['position']['x'],
+            sensor_data['location']['position']['y'],
+            sensor_data['location']['position']['z']
+        )
+
+        sensor.rotation_euler = (
+            sensor_data['location']['orientation']['r'],
+            sensor_data['location']['orientation']['p'],
+            sensor_data['location']['orientation']['y']
+        )
+
+        if 'parent' in sensor_data:
+            parent_obj_handle = bpy.data.objects[sensor_data['parent']]
+            sensor.ambf_object_parent = parent_obj_handle
+        if 'visible' in sensor_data:
+            sensor.ambf_object_visible = sensor_data['visible']
+        if 'visible size' in sensor_data:
+            sensor.ambf_object_visible_size = sensor_data['visible size']
+
+        # Check sensor type and load relevant properties
+        sensor_type = sensor.ambf_sensor_properties.ambf_sensor_type
+        if sensor_type == 'Proximity':
+            if 'range' in sensor_data:
+                sensor.ambf_sensor_properties.ambf_sensor_range = sensor_data['range']
+            
+            # Populate the array data
+            if 'array' in sensor_data:
+                # Clear any existing items in the array
+                sensor.ambf_sensor_properties.ambf_sensor_array.clear()
+                for item in sensor_data['array']:
+                    new_item = sensor.ambf_sensor_properties.ambf_sensor_array.add()
+                    new_item.offset = (item['offset']['x'], item['offset']['y'], item['offset']['z'])
+                    new_item.direction = (item['direction']['x'], item['direction']['y'], item['direction']['z'])
+
+        elif sensor_type == 'Resistance':
+            if 'friction' in sensor_data:
+                if 'damping' in sensor_data['friction']:
+                    sensor.ambf_sensor_properties.ambf_sensor_friction_damping = sensor_data['friction']['damping']
+                if 'static' in sensor_data['friction']:
+                    sensor.ambf_sensor_properties.ambf_sensor_friction_static = sensor_data['friction']['static']
+                if 'dynamic' in sensor_data['friction']:
+                    sensor.ambf_sensor_properties.ambf_sensor_friction_dynamic = sensor_data['friction']['dynamic']
+                if 'variable' in sensor_data['friction']:
+                    sensor.ambf_sensor_properties.ambf_sensor_friction_variable = sensor_data['friction']['variable']
+            if 'contact area' in sensor_data:
+                sensor.ambf_sensor_properties.ambf_sensor_contact_area = sensor_data['contact area']
+            if 'contact stiffness' in sensor_data:
+                sensor.ambf_sensor_properties.ambf_sensor_contact_stiffness = sensor_data['contact stiffness']
+            if 'contact damping' in sensor_data:
+                sensor.ambf_sensor_properties.ambf_sensor_contact_damping = sensor_data['contact damping']
+
+        elif sensor_type == 'Contact':
+            if 'distance threshold' in sensor_data:
+                sensor.ambf_sensor_properties.ambf_sensor_distance_threshold = sensor_data['distance threshold']
+            if 'process contact details' in sensor_data:
+                sensor.ambf_sensor_properties.ambf_sensor_process_contact_details = sensor_data['process contact details']
+
+        # Link the sensor object to the current scene
+        scene = bpy.context.scene
+        scene.collection.objects.link(sensor)
+
+        return sensor
 
     def load_material(self, body_data, obj_handle):
 
@@ -2915,17 +3274,20 @@ class AMBF_OT_load_ambf_file(Operator):
         camera_data = self._adf_data[camera_name]
         cam_handle = self.load_ambf_camera(camera_data)
         CommonConfig.loaded_camera_map[cam_handle] = camera_data
+
+    def load_light(self, light_name):
+        light_data = self._adf_data[light_name]
+        light_handle = self.load_ambf_light(light_data)
+        CommonConfig.loaded_light_map[light_handle] = light_data
+
+    def load_actuator(self, actuator_name):
+        actuator_data = self._adf_data[actuator_name]
+        obj_handle = self.load_ambf_actuator(actuator_data)
+        CommonConfig.loaded_body_map[obj_handle] = actuator_data
     
     def load_sensor(self, sensor_name):
         sensor_data = self._adf_data[sensor_name]
-
-        obj_handle = self.load_ambf_mesh(sensor_data, sensor_name)
-
-        self.load_object_name(sensor_data, obj_handle)
-
-        self.load_body_location(sensor_data, obj_handle)
-
-        self._blender_remapped_body_names[sensor_name] = obj_handle.name
+        obj_handle = self.load_ambf_sensor(sensor_data)
         CommonConfig.loaded_body_map[obj_handle] = sensor_data
 
     def get_ambf_joint_type(self, joint_data):
@@ -3313,16 +3675,11 @@ class AMBF_OT_load_ambf_file(Operator):
             sensors_list = self._adf_data['sensors']
         except:
             sensors_list = []
-
-        try:
-            sensors_list = self._adf_data['actuators']
-        except:
-            sensors_list = []
         
         try:
-            actuarators_list = self._adf_data['actuators']
+            actuators_list = self._adf_data['actuators']
         except:
-            actuarators_list = []
+            actuators_list = []
 
         if 'namespace' in self._adf_data:
             set_global_namespace(context, self._adf_data['namespace'])
@@ -3344,22 +3701,28 @@ class AMBF_OT_load_ambf_file(Operator):
 
         # print(self._high_res_path)
         for body_id in bodies_list:
+            print('Loading Body: ', body_id)
             self.load_body(body_id)
 
         for joint_name in joints_list:
+            print('Loading Joint: ', joint_name)
             self.load_ambf_joint(joint_name)
 
         for camera_name in camera_list:
+            print('Loading Camera: ', camera_name)
             self.load_camera(camera_name)
         
-        # for light_name in lighting_list:
-        #     self.load_light(light_name)
+        for light_name in lighting_list:
+            print('Loading Light: ', light_name)
+            self.load_light(light_name)
         
-        # for sensor_name in sensors_list:
-        #     self.load_sensor(sensor_name)
+        for sensor_name in sensors_list:
+            print('Loading Sensor: ', sensor_name)
+            self.load_sensor(sensor_name)
         
-        # for actuator_name in actuators_list:
-        #     self.load_actuator(actuator_name)
+        for actuator_name in actuators_list:
+            print('Loading Actuator: ', actuator_name)
+            self.load_actuator(actuator_name)
 
         # Set the model ignore collision flag
         try:
@@ -3379,6 +3742,171 @@ class AMBF_OT_load_ambf_file(Operator):
         # print('Printing Blender Remapped Body Names')
         # print(self._blender_remapped_body_names)
         return {'FINISHED'}
+    
+"""******************* CREATOR ADDON *******************"""
+
+'''
+WORKSPACE OPERATIONS
+'''
+class CleanWorkspace(bpy.types.Operator):
+    """Clean all objects not in any scene"""
+    bl_idname = "object.clean_workspace"
+    bl_label = "Clean Workspace"
+
+    def execute(self, context):
+        # Get all objects that are part of the current scene
+        scene_objects = set(context.scene.objects)
+        # Get all objects in the data
+        all_objects = set(bpy.data.objects)
+        # Calculate the difference
+        orphan_objects = all_objects - scene_objects
+
+        # Remove objects that are not part of any scene
+        for obj in orphan_objects:
+            # Data-blocks users counter doesn't update in the undo/redo stack, hence obj.users > 0 condition is added
+            if obj.users == 0:
+                bpy.data.objects.remove(obj, do_unlink=True)
+
+        return {'FINISHED'}
+
+class OBJECT_PT_Workspace_Main_Panel(bpy.types.Panel):
+    """Panel for Workspace Operations"""
+    bl_label = "Workspace Operations"
+    bl_idname = "OBJECT_PT_workspace_main_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Helper"
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Perform Workspace Operations Here")
+
+        col = layout.column()
+        col.separator()
+        col.operator("object.clean_workspace", text="Clean Workspace")
+
+
+'''
+GEOMETRY OPERATIONS
+'''
+class OBJECT_PT_Geometry_Main_Panel(bpy.types.Panel):
+    """Panel for Geometry Operations"""
+    bl_label = "Geometry Operations"
+    bl_idname = "OBJECT_PT_geometry_main_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Helper"
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Perform Geometry Operations Here")
+
+        row = layout.row()
+        row.alignment = 'CENTER'
+        row.operator("ed.undo", text="", icon='LOOP_BACK')
+        row.separator()
+        row.operator("ed.redo", text="", icon='LOOP_FORWARDS')
+
+        col = layout.column()
+        col.operator("mesh.add_cube", text="Add Cube")
+        col.operator("mesh.add_sphere", text="Add Sphere")
+        col.operator("mesh.add_cylinder", text="Add Cylinder")
+
+        col = layout.column()
+        col.separator()
+        col.operator("object.select_all", text="Select All").action = 'SELECT'
+        col.operator("object.select_all", text="Deselect All").action = 'DESELECT'
+        
+        col = layout.column()
+        # add layout divider
+        col.separator()
+        col.operator("object.delete_all_objects", text="Delete All")
+        col.operator("object.delete_selected_objects", text="Delete Selected")
+
+class AddCube(bpy.types.Operator):
+    """Add a new cube to the scene"""
+    bl_idname = "mesh.add_cube"
+    bl_label = "Add Cube"
+
+    def execute(self, context):
+        bpy.ops.mesh.primitive_cube_add()
+        return {'FINISHED'}
+
+class AddSphere(bpy.types.Operator):
+    """Add a new sphere to the scene"""
+    bl_idname = "mesh.add_sphere"
+    bl_label = "Add Sphere"
+
+    def execute(self, context):
+        bpy.ops.mesh.primitive_uv_sphere_add()
+        return {'FINISHED'}
+
+class AddCylinder(bpy.types.Operator):
+    """Add a new cylinder to the scene"""
+    bl_idname = "mesh.add_cylinder"
+    bl_label = "Add Cylinder"
+
+    def execute(self, context):
+        bpy.ops.mesh.primitive_cylinder_add()
+        return {'FINISHED'}
+
+class DeleteAllObjects(bpy.types.Operator):
+    """Delete all objects in the scene"""
+    bl_idname = "object.delete_all_objects"
+    bl_label = "Delete All Objects"
+
+    def execute(self, context):
+        bpy.ops.object.select_all(action='SELECT')
+        bpy.ops.object.delete(use_global=False)
+        return {'FINISHED'}
+    
+class DeleteSelectedObjects(bpy.types.Operator):
+    """Delete selected objects in the scene"""
+    bl_idname = "object.delete_selected_objects"
+    bl_label = "Delete Selected Objects"
+
+    def execute(self, context):
+        bpy.ops.object.delete(use_global=False)
+        return {'FINISHED'}
+
+'''
+CAMERA OPERATIONS
+'''
+class SetActiveCamera(bpy.types.Operator):
+    """Set a camera as the active camera"""
+    bl_idname = "scene.set_active_camera"
+    bl_label = "Set Active Camera"
+
+    camera_name: bpy.props.StringProperty() 
+
+    def execute(self, context):
+        camera = bpy.data.objects.get(self.camera_name)
+        if camera and camera.type == 'CAMERA':
+            context.scene.camera = camera
+            self.report({'INFO'}, f"Active camera set to: {camera.name}")
+        else:
+            self.report({'ERROR'}, "No camera found with the given name")
+        return {'FINISHED'}
+
+class OBJECT_PT_Camera_Panel(bpy.types.Panel):
+    """Panel for Camera Operations"""
+    bl_label = "Camera Operations"
+    bl_idname = "OBJECT_PT_camera_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Helper"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        layout.label(text="Set Active Camera")
+        # Iterate through all cameras in the scene and create a button for each
+        for obj in scene.objects:
+            if obj.type == 'CAMERA':
+                op = layout.operator("scene.set_active_camera", text=obj.name)
+                op.camera_name = obj.name  # Pass the camera name to the operator
+"""*****************************************************"""
 
 
 class AMBF_OT_cleanup_all(Operator):
@@ -3390,6 +3918,58 @@ class AMBF_OT_cleanup_all(Operator):
         for o in bpy.data.objects:
             bpy.data.objects.remove(o)
         return {'FINISHED'}
+    
+class CollectionSelectorPanel(bpy.types.Panel):
+    bl_label = "Collection Manager"
+    bl_idname = "OBJECT_PT_collection_selector"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Collection Manager"
+    
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        # Active Collection Box at the Top
+        box = layout.box()
+        row = box.row()
+        row.label(text="Active Collection:", icon='OUTLINER_OB_GROUP_INSTANCE')
+        row = box.row()
+        row.label(text=f"{scene.active_collection_name}" if scene.active_collection_name else "None")
+
+        layout.separator()
+
+        # Collection Selection
+        box = layout.box()
+        box.label(text="Select Collections to Show:", icon='OUTLINER_COLLECTION')
+
+        selected_collections = scene.selected_collections.split(',')
+        active_collection = scene.active_collection_name
+        
+        for collection in bpy.data.collections:
+            row = box.row(align=True)
+            is_selected = collection.name in selected_collections
+            is_active = collection.name == active_collection
+
+            if is_active:
+                row.alert = True
+            elif not is_selected:
+                row.enabled = False
+
+            row.prop(collection, "hide_viewport", text=collection.name, toggle=True)
+            op = row.operator("view3d.activate_collection", text="", icon='RESTRICT_SELECT_OFF' if is_active else 'RADIOBUT_OFF')
+            op.collection_name = collection.name
+            op = row.operator("view3d.delete_collection", text="", icon='X')
+            op.collection_name = collection.name
+
+        layout.separator()
+
+        # Add New Collection
+        box = layout.box()
+        box.label(text="Add New Collection:", icon='ADD')
+        row = box.row(align=True)
+        row.prop(scene, "new_collection_name", text="")
+        row.operator("view3d.add_collection", text="", icon='ADD')
 
 class ToggleCollectionSelectionOperator(bpy.types.Operator):
     bl_idname = "view3d.toggle_collection_selection"
@@ -3408,7 +3988,67 @@ class ToggleCollectionSelectionOperator(bpy.types.Operator):
         
         scene.selected_collections = ','.join(selected_collections)
         return {'FINISHED'}
+class ActivateCollectionOperator(bpy.types.Operator):
+    bl_idname = "view3d.activate_collection"
+    bl_label = "Activate Collection"
+    
+    collection_name: bpy.props.StringProperty()
+    
+    def execute(self, context):
+        scene = context.scene
+        context.scene.active_collection_name = self.collection_name
+        
+        # Automatically select the collection checkbox when activated
+        selected_collections = scene.selected_collections.split(',')
+        if self.collection_name not in selected_collections:
+            selected_collections.append(self.collection_name)
+            scene.selected_collections = ','.join(selected_collections)
+        
+        # Ensure the collection is shown by updating the selected collections
+        update_selected_collections(scene, context)
+        
+        self.report({'INFO'}, f"Collection '{self.collection_name}' Activated and Shown")
+        return {'FINISHED'}
 
+class DeleteCollectionOperator(bpy.types.Operator):
+    bl_idname = "view3d.delete_collection"
+    bl_label = "Delete Collection"
+    
+    collection_name: bpy.props.StringProperty()
+    
+    def execute(self, context):
+        collection = bpy.data.collections.get(self.collection_name)
+        if collection:
+            bpy.data.collections.remove(collection)
+            # Update selected collections after deletion
+            selected_collections = context.scene.selected_collections.split(',')
+            if self.collection_name in selected_collections:
+                selected_collections.remove(self.collection_name)
+                context.scene.selected_collections = ','.join(selected_collections)
+            # Clear active collection if it's the one being deleted
+            if context.scene.active_collection_name == self.collection_name:
+                context.scene.active_collection_name = ""
+            self.report({'INFO'}, f"Collection '{self.collection_name}' Deleted")
+        else:
+            self.report({'WARNING'}, f"Collection '{self.collection_name}' not found")
+        return {'FINISHED'}
+
+class AddCollectionOperator(bpy.types.Operator):
+    bl_idname = "view3d.add_collection"
+    bl_label = "Add Collection"
+    
+    def execute(self, context):
+        scene = context.scene
+        collection_name = scene.new_collection_name.strip()
+        if collection_name:
+            new_collection = bpy.data.collections.new(name=collection_name)
+            bpy.context.scene.collection.children.link(new_collection)
+            scene.selected_collections = ','.join(scene.selected_collections.split(',') + [collection_name])
+            self.report({'INFO'}, f"Collection '{collection_name}' Added")
+        else:
+            self.report({'WARNING'}, "Collection name cannot be empty")
+        return {'FINISHED'}
+    
 class AMBF_OT_select_all(Operator):
     """Add Rigid Body Properties"""
     bl_label = "SELECT ALL"
@@ -3417,7 +4057,6 @@ class AMBF_OT_select_all(Operator):
     def execute(self, context):
         select_all_objects(True)
         return {'FINISHED'}
-
 
 class AMBF_OT_hide_all_joints(Operator):
     """Add Joint Properties"""
@@ -3444,7 +4083,6 @@ class AMBF_OT_hide_passive_joints(Operator):
                     hidden = is_object_hidden(o)
                     hide_object(o, not hidden)
         return {'FINISHED'}
-
 
 class AMBF_OT_ambf_rigid_body_cleanup(Operator):
     """Add Rigid Body Properties"""
@@ -3554,6 +4192,7 @@ class AMBF_OT_ambf_actuator_activate(Operator):
     bl_idname = "ambf.ambf_actuator_activate"
 
     def execute(self, context):
+        # print ('ACTUATOR ACTIVATE')
         if context.object.ambf_object_type != 'ACTUATOR':
             context.object.ambf_object_type = 'ACTUATOR'
         else:
@@ -3567,6 +4206,7 @@ class AMBF_OT_ambf_sensor_activate(Operator):
     bl_idname = "ambf.ambf_sensor_activate"
 
     def execute(self, context):
+        # print ('SENSOR ACTIVATE')
         if context.object.ambf_object_type != 'SENSOR':
             context.object.ambf_object_type = 'SENSOR'
         else:
@@ -3685,7 +4325,7 @@ class AMBF_PT_main_panel(Panel):
     bl_region_type = 'UI'
     bl_category = "AMBF"
 
-    ambf_object_types = ['RIGID_BODY', 'CONSTRAINT', 'COLLISION_SHAPE', 'GHOST_OBJECT', 'CAMERA', 'LIGHT', 'SENSOR', 'ACTUATOR']
+    ambf_object_types = ['RIGID_BODY','GHOST_OBJECT', 'SOFT_BODY',  'CONSTRAINT', 'COLLISION_SHAPE', 'CAMERA', 'LIGHT', 'SENSOR', 'ACTUATOR']
 
     setup_yaml()
     # set_view_transform_orientation_to_local()
@@ -4320,7 +4960,6 @@ class AMBF_PT_ambf_constraint(Panel):
                 if context.scene.objects.get(context.object.ambf_object_child.name) is None:
                     context.object.ambf_object_child = None
 
-            
             layout.separator()
             
             if context.object.ambf_constraint_type in ['PRISMATIC', 'REVOLUTE', 'LINEAR_SPRING', 'TORSION_SPRING']:
@@ -4528,7 +5167,6 @@ class AMBF_PT_ambf_camera(Panel):
             col = layout.column()
             col.prop(context.object.data, 'clip_end')
 
-
 class AMBF_PT_ambf_light(Panel):
     """Add Light Properties"""
     bl_label = "AMBF LIGHT PROPERTIES"
@@ -4542,7 +5180,7 @@ class AMBF_PT_ambf_light(Panel):
         active = False
         active_obj_handle = get_active_object()
         if active_obj_handle:
-            if active_obj_handle.type in ['LIGHT']:
+            if active_obj_handle.type == 'LIGHT':
                 active = True
         return active
     
@@ -4556,19 +5194,26 @@ class AMBF_PT_ambf_light(Panel):
 
         if context.object.ambf_object_type == 'LIGHT':
             row = layout.row()
+            row.prop(context.object, 'ambf_light_namespace')
+
+            row = layout.row()
             row.prop(context.object, 'name')
-            
+
+            # row = layout.row()
+            # row.prop_search(context.object, "ambf_object_parent", context.scene, "objects")
+
+            # Add custom AMBF properties for the light
             row = layout.row()
-            row.prop(context.object.data, 'type')
+            row.prop(context.object, 'ambf_light_spot_exponent', text="Spot Exponent")
 
             row = layout.row()
-            row.prop(context.object.data, 'color')
+            row.prop(context.object, 'ambf_light_shadow_quality', text="Shadow Quality")
 
             row = layout.row()
-            row.prop(context.object.data, 'energy')
+            row.prop(context.object, 'ambf_light_cutoff_angle', text="Cutoff Angle")
 
-            row = layout.row()
-            row.prop(context.object, 'ambf_object_visible', toggle=False)
+            # row = layout.row()
+            # row.prop(context.object, 'ambf_light_constant_attenuation', text="Constant Attenuation")
 
 
 class AMBF_PT_ambf_actuator(Panel):
@@ -4596,22 +5241,23 @@ class AMBF_PT_ambf_actuator(Panel):
         row.operator('ambf.ambf_actuator_activate', text='Enable AMBF Actuator', icon='FORCE_HARMONIC')
         row.scale_y = 2
 
-        # Name property
-        row = layout.row()
-        row.prop(context.object, 'name')
+        if context.object.ambf_object_type == 'ACTUATOR':
+            # Name property
+            row = layout.row()
+            row.prop(context.object, 'name')
 
-        # Parent property
-        row = layout.row()
-        row.prop(context.object, 'parent')
+            # Parent property
+            row = layout.row()
+            row.prop_search(context.object, 'ambf_object_parent', context.scene, 'objects')
 
-        # Visible boolean property
-        row = layout.row()
-        row.prop(context.object, 'ambf_object_visible', toggle=False)
+            # Visible boolean property
+            row = layout.row()
+            row.prop(context.object, 'ambf_object_visible', toggle=False)
 
-        # Visible size property
-        row = layout.row()
-        row.alignment = 'EXPAND'
-        row.prop(context.object, 'ambf_object_visible_size')
+            # Visible size property
+            row = layout.row()
+            row.alignment = 'EXPAND'
+            row.prop(context.object, 'ambf_object_visible_size')
 
 class AMBF_PT_ambf_sensor(Panel):
     """Add Sensor Properties"""
@@ -4632,265 +5278,176 @@ class AMBF_PT_ambf_sensor(Panel):
     
     def draw(self, context):
         layout = self.layout
+        obj = context.object
 
+        # Sensor Activation Button
         row = layout.row()
         row.alignment = 'EXPAND'
         row.operator('ambf.ambf_sensor_activate', text='Enable AMBF Sensor', icon='FORCE_HARMONIC')
         row.scale_y = 2
 
-        # Name property
-        row = layout.row()
-        row.prop(context.object, 'name')
+        # Display properties only if the object is a sensor
+        if obj.ambf_object_type == 'SENSOR':
+            # Sensor Name Property
+            row = layout.row()
+            row.prop(obj, 'name', text="Sensor Name")
 
-        # Parent property
-        row = layout.row()
-        row.prop(context.object, 'parent')
+            # Parent Property
+            row = layout.row()
+            row.prop_search(obj, 'ambf_object_parent', context.scene, 'objects', text="Parent Object")
 
-        # Visible boolean property
-        row = layout.row()
-        row.prop(context.object, 'ambf_object_visible', toggle=False)
+            # Sensor Type Dropdown
+            row = layout.row()
+            row.prop(obj, 'ambf_sensor_type', text="Sensor Type")
 
-        # Visible size property
-        row = layout.row()
-        row.alignment = 'EXPAND'
-        row.prop(context.object, 'ambf_object_visible_size')
+            # Visible Boolean Property
+            row = layout.row()
+            row.prop(obj, 'ambf_object_visible', text="Visible")
 
-# class AMBF_PT_ambf_soft_body(Panel):
-#     """Add Soft Body Properties"""
-#     bl_label = "AMBF SOFT BODY PROPERTIES"
-#     bl_idname = "AMBF_PT_ambf_soft_body"
-#     bl_space_type = 'PROPERTIES'
-#     bl_region_type = 'WINDOW'
-#     bl_context = "physics"
+            # Visible Size Property
+            row = layout.row()
+            row.alignment = 'EXPAND'
+            row.prop(obj, 'ambf_object_visible_size', text="Visible Size")
+            
+            # Conditional properties based on sensor type
+            sensor_type = obj.ambf_sensor_type
 
-#     @classmethod
-#     def poll(cls, context):
-#         active = False
-#         active_obj_handle = context.object
-#         if active_obj_handle: # Check if an obj_handle is active
-#             if active_obj_handle.type == 'MESH':
-#                 active = True
-#         return active
+            if obj.ambf_sensor_type == 'Proximity':
+                # Range Property
+                row = layout.row()
+                row.prop(obj, 'ambf_sensor_range', text="Range")
+
+                # Sensor Array Items
+                col = layout.column()
+                col.label(text="Sensor Array Items:")
+                col.operator('ambf.add_sensor_array_item', text="Add Array Item")
+
+                for i, item in enumerate(obj.ambf_sensor_properties.ambf_sensor_array):
+                    box = col.box()
+                    row = box.row()
+                    row.label(text=f"Item {i+1}")
+                    
+                    # Remove button
+                    remove_op = row.operator('ambf.remove_sensor_array_item', text="", icon='X')
+                    remove_op.index = i  # Pass the index of the item to remove
+
+                    # Offset and Direction properties
+                    box.prop(item, "offset", text="Offset")
+                    box.prop(item, "direction", text="Direction")
+
+            elif sensor_type == 'Resistance':
+                # Friction Properties
+                row = layout.row()
+                row.label(text="Friction Properties")
+                col = layout.column(align=True)
+                col.prop(obj, 'ambf_sensor_friction_static', text="Static Friction")
+                col.prop(obj, 'ambf_sensor_friction_damping', text="Damping Friction")
+                col.prop(obj, 'ambf_sensor_friction_dynamic', text="Dynamic Friction")
+                col.prop(obj, 'ambf_sensor_friction_variable', text="Variable Friction")
+
+                # Contact Area, Stiffness, Damping
+                row = layout.row()
+                row.prop(obj, 'ambf_sensor_contact_area', text="Contact Area")
+                row = layout.row()
+                row.prop(obj, 'ambf_sensor_contact_stiffness', text="Contact Stiffness")
+                row = layout.row()
+                row.prop(obj, 'ambf_sensor_contact_damping', text="Contact Damping")
+
+            elif sensor_type == 'Contact':
+                # Distance Threshold
+                row = layout.row()
+                row.prop(obj, 'ambf_sensor_distance_threshold', text="Distance Threshold")
+
+                # Process Contact Details
+                row = layout.row()
+                row.prop(obj, 'ambf_sensor_process_contact_details', text="Process Contact Details")
+            
+            # TODO: Implement this in the future
+            # # Enable Frequency Checkbox
+            # row = layout.row()
+            # row.prop(obj, 'ambf_sensor_enable_frequency', text="Enable Frequency")
+
+            # # Only display Publish Frequency Property if enabled
+            # if obj.ambf_sensor_enable_frequency:
+            #     row = layout.row()
+            #     row.prop(obj, 'ambf_sensor_frequency', text="Publish Frequency")
+
+
+class AMBF_PT_ambf_soft_body(bpy.types.Panel):
+    """Add Soft Body Properties"""
+    bl_label = "AMBF SOFT BODY PROPERTIES"
+    bl_idname = "AMBF_PT_ambf_soft_body"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "physics"
     
-#     def draw(self, context):
-#         layout = self.layout
-#         obj = context.object
-#         soft_body_props = context.scene.soft_body_properties
+    @classmethod
+    def poll(cls, context):
+        active_obj_handle = context.object
+        return active_obj_handle and active_obj_handle.type == 'MESH'
+    
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        
+        col = layout.row()
+        col.alignment = 'EXPAND'
+        col.scale_y = 2
+        col.operator('ambf.ambf_soft_body_activate', text='Enable AMBF Soft Body', icon='RNA_ADD')
+        
+        if obj.ambf_object_type == 'SOFT_BODY':
+            layout.separator()
+            layout.separator()
 
-#         row = layout.row()
-#         row.alignment = 'EXPAND'
-#         row.operator('ambf.ambf_soft_body_activate', text='Enable AMBF Soft Body', icon='RNA_ADD')
-#         row.scale_y = 2
-        
-#         # Name property
-#         row = layout.row()
-#         row.prop(obj, 'name')
+            # Namespace
+            row = layout.row()
+            row.prop(obj, 'ambf_soft_body_namespace')
 
-#         # Collision Mesh Type property
-#         row = layout.row()
-#         row.prop(obj, 'ambf_collision_mesh_type')
+            # Stiffness Properties
+            box = layout.box()
+            box.label(text="Stiffness Properties")
+            box.prop(obj, 'ambf_soft_body_linear_stiffness')
+            box.prop(obj, 'ambf_soft_body_angular_stiffness')
+            box.prop(obj, 'ambf_soft_body_volume_stiffness')
 
-#         # Use Separate Collision Mesh property
-#         row = layout.row()
-#         row.prop(obj, 'ambf_use_separate_collision_mesh')
+            # Damping and Friction
+            box = layout.box()
+            box.label(text="Damping and Friction Properties")
+            box.prop(obj, 'ambf_soft_body_velocity_damping')
+            box.prop(obj, 'ambf_soft_body_drag_coefficient')
+            box.prop(obj, 'ambf_soft_body_dynamic_friction')
 
-#         # Collision Margin Enable property
-#         row = layout.row()
-#         row.prop(obj, 'ambf_collision_margin_enable')
+            # Aerodynamics and Pressure
+            box = layout.box()
+            box.label(text="Aerodynamic and Pressure Properties")
+            box.prop(obj, 'ambf_soft_body_lift_coefficient')
+            box.prop(obj, 'ambf_soft_body_pressure_coefficient')
+            box.prop(obj, 'ambf_soft_body_volume_conservation')
 
-#         # Collision Margin property
-#         row = layout.row()
-#         row.prop(obj, 'ambf_collision_margin')
+            # Hardness Properties
+            box = layout.box()
+            box.label(text="Hardness Properties")
+            box.prop(obj, 'ambf_soft_body_collision_hardness')
+            box.prop(obj, 'ambf_soft_body_kinetic_hardness')
+            box.prop(obj, 'ambf_soft_body_shear_hardness')
 
-#         # Collision Groups property
-#         row = layout.row()
-#         row.prop(obj, 'ambf_collision_groups')
-        
-#         # Collision Shape property
-#         row = layout.row()
-#         row.prop(obj, 'ambf_collision_shape')
+            # Other Properties
+            box = layout.box()
+            box.label(text="Additional Properties")
+            box.prop(obj, 'ambf_soft_body_max_volume')
+            box.prop(obj, 'ambf_soft_body_timescale')
+            box.prop(obj, 'ambf_soft_body_velocity_iterations')
+            box.prop(obj, 'ambf_soft_body_position_iterations')
+            box.prop(obj, 'ambf_soft_body_deformation_iterations')
+            box.prop(obj, 'ambf_soft_body_collision_iterations')
 
-#         # Collision Show Shapes property
-#         row = layout.row()
-#         row.prop(obj, 'ambf_collision_show_shapes_per_object')
-
-#         # Soft Body Properties
-#         row = layout.row()
-#         row.prop(soft_body_props, 'damping')
-#         if soft_body_props.damping:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'linear_damping')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_linear_stiffness')
-#         if soft_body_props.enable_linear_stiffness:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'linear_stiffness')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_angular_stiffness')
-#         if soft_body_props.enable_angular_stiffness:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'angular_stiffness')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_volume_stiffness')
-#         if soft_body_props.enable_volume_stiffness:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'volume_stiffness')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_volume_constraint_force')
-#         if soft_body_props.enable_volume_constraint_force:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'volume_constraint_force')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_pressure')
-#         if soft_body_props.enable_pressure:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'pressure')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_volume_conservation')
-#         if soft_body_props.enable_volume_conservation:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'volume_conservation')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_dynamic_friction')
-#         if soft_body_props.enable_dynamic_friction:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'dynamic_friction')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_mass_thickness')
-#         if soft_body_props.enable_mass_thickness:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'mass_thickness')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_collision_hardness')
-#         if soft_body_props.enable_collision_hardness:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'collision_hardness')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_kinematic_hardness')
-#         if soft_body_props.enable_kinematic_hardness:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'kinematic_hardness')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_shear_hardness')
-#         if soft_body_props.enable_shear_hardness:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'shear_hardness')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_aerodynamic_hardness')
-#         if soft_body_props.enable_aerodynamic_hardness:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'aerodynamic_hardness')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_self_collision_hardness_radius_clamped')
-#         if soft_body_props.enable_self_collision_hardness_radius_clamped:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'self_collision_hardness_radius_clamped')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_self_kinematic_hardness_radius_clamped')
-#         if soft_body_props.enable_self_kinematic_hardness_radius_clamped:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'self_kinematic_hardness_radius_clamped')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_self_shear_hardness_radius_clamped')
-#         if soft_body_props.enable_self_shear_hardness_radius_clamped:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'self_shear_hardness_radius_clamped')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_self_collision_hardness_split_clamped')
-#         if soft_body_props.enable_self_collision_hardness_split_clamped:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'self_collision_hardness_split_clamped')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_self_kinematic_hardness_split_clamped')
-#         if soft_body_props.enable_self_kinematic_hardness_split_clamped:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'self_kinematic_hardness_split_clamped')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_self_shear_hardness_split_clamped')
-#         if soft_body_props.enable_self_shear_hardness_split_clamped:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'self_shear_hardness_split_clamped')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_max_volume')
-#         if soft_body_props.enable_max_volume:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'max_volume')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_time_scale')
-#         if soft_body_props.enable_time_scale:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'time_scale')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_velocity_iterations')
-#         if soft_body_props.enable_velocity_iterations:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'velocity_iterations')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_position_iterations')
-#         if soft_body_props.enable_position_iterations:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'position_iterations')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_damping_iterations')
-#         if soft_body_props.enable_damping_iterations:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'damping_iterations')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_constraint_iterations')
-#         if soft_body_props.enable_constraint_iterations:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'constraint_iterations')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_flags')
-#         if soft_body_props.enable_flags:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'flags')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_bending_constraint')
-#         if soft_body_props.enable_bending_constraint:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'bending_constraint')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_cutting')
-#         if soft_body_props.enable_cutting:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'cutting')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_clusters')
-#         if soft_body_props.enable_clusters:
-#             row = layout.row()
-#             row.prop(soft_body_props, 'clusters')
-        
-#         row = layout.row()
-#         row.prop(soft_body_props, 'enable_fixed_nodes')
+            # Flags and Cutting
+            box = layout.box()
+            box.label(text="Flags and Cutting Properties")
+            box.prop(obj, 'ambf_soft_body_flags')
+            box.prop(obj, 'ambf_soft_body_cutting_enabled')
+            box.prop(obj, 'ambf_soft_body_clusters')
+            box.prop(obj, 'ambf_soft_body_fixed_nodes')
 
 class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
     ambf_collision_shape_radius: FloatProperty \
@@ -4970,71 +5527,317 @@ class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
             subtype='EULER',
         )
 
+class SoftBodyProperties(PropertyGroup):
+    Object.ambf_soft_body_namespace = bpy.props.StringProperty(
+        name="Namespace",
+        default="/ambf/env/"
+    )
 
-custom_classes = (AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
-                  AMBF_PG_CollisionShapePropGroup,
+    # Stiffness properties
+    Object.ambf_soft_body_linear_stiffness = bpy.props.FloatProperty(
+        name="kLST (Linear Stiffness)", default=0.05, min=0.01, max=0.1
+    )
+    
+    Object.ambf_soft_body_angular_stiffness = bpy.props.FloatProperty(
+        name="kAST (Angular Stiffness)", default=0.05, min=0.01, max=0.1
+    )
 
-                  AMBF_OT_cleanup_all,
-                  AMBF_OT_ambf_rigid_body_cleanup,
-                  AMBF_OT_ambf_constraint_cleanup,
-                  AMBF_OT_ambf_collision_shape_cleanup,
-                  AMBF_OT_select_all,
-                  AMBF_OT_hide_passive_joints,
-                  AMBF_OT_hide_all_joints,
+    Object.ambf_soft_body_volume_stiffness = bpy.props.FloatProperty(
+        name="kVST (Volume Stiffness)", default=0.05, min=0.01, max=0.1
+    )
 
-                  AMBF_OT_remove_low_res_mesh_modifiers,
-                  AMBF_OT_generate_low_res_mesh_modifiers,
-                  AMBF_OT_generate_ambf_file,
-                  AMBF_OT_save_meshes,
-                  AMBF_OT_load_ambf_file,
+    # Damping and drag properties
+    Object.ambf_soft_body_velocity_damping = bpy.props.FloatProperty(
+        name="kVCF (Velocity Damping Coefficient)", default=0.05, min=0.01, max=0.1
+    )
 
-                  AMBF_OT_create_joint,
-                  AMBF_OT_create_sensor,
-                  AMBF_OT_create_actuator,
+    Object.ambf_soft_body_drag_coefficient = bpy.props.FloatProperty(
+        name="kDP (Drag Coefficient)", default=0.05, min=0.01, max=0.1
+    )
 
-                  AMBF_OT_remove_object_namespaces,
-                  AMBF_OT_estimate_inertial_offsets,
-                  AMBF_OT_estimate_shape_offsets,
-                  AMBF_OT_ambf_collision_shape_add,
-                  AMBF_OT_ambf_collision_shape_remove,
-                  AMBF_OT_estimate_collision_shapes_geometry,
-                  AMBF_OT_estimate_inertias,
-                  AMBF_OT_estimate_joint_controller_gains,
-                  AMBF_OT_auto_rename_joints,
-                  AMBF_OT_estimate_inertial_offset_per_object,
-                  AMBF_OT_estimate_shape_offset_per_object,
-                  AMBF_OT_estimate_collision_shape_geometry_per_object,
-                  AMBF_OT_estimate_inertia_per_object,
-                  AMBF_OT_estimate_joint_controller_gain_per_object,
-                  AMBF_OT_auto_rename_joint_per_object,
+    # Friction properties
+    Object.ambf_soft_body_dynamic_friction = bpy.props.FloatProperty(
+        name="kDG (Dynamic Friction Coefficient)", default=0.05, min=0.01, max=0.1
+    )
 
-                  AMBF_OT_ambf_rigid_body_activate,
-                  AMBF_OT_ambf_ghost_object_activate,
-                  AMBF_OT_ambf_soft_body_activate,
-                  AMBF_OT_ambf_constraint_activate,
-                  AMBF_OT_ambf_camera_activate,
-                  AMBF_OT_ambf_light_activate,
-                  AMBF_OT_ambf_sensor_activate,
-                  AMBF_OT_ambf_actuator_activate, 
+    # Aerodynamic properties
+    Object.ambf_soft_body_lift_coefficient = bpy.props.FloatProperty(
+        name="kLF (Lift Coefficient)", default=0.05, min=0.01, max=0.1
+    )
 
-                  OBJECT_PT_DebuggerPanel,
+    # Pressure and volume conservation properties
+    Object.ambf_soft_body_pressure_coefficient = bpy.props.FloatProperty(
+        name="kPR (Pressure Coefficient)", default=0.05, min=0.01, max=0.1
+    )
 
-                  AMBF_PT_main_panel,
-                  AMBF_PT_ambf_rigid_body,
-                  AMBF_PT_ambf_ghost_object,
-                #   AMBF_PT_ambf_soft_body,
-                  AMBF_PT_ambf_constraint,
-                  AMBF_PT_ambf_actuator,
-                  AMBF_PT_ambf_sensor,
-                  AMBF_PT_ambf_camera,
-                  AMBF_PT_ambf_light,
-                  
-                  AMBF_OT_ambf_move_collision_mesh_to_body_origin,
-                  AMBF_OT_ambf_collision_mesh_use_current_location,
+    Object.ambf_soft_body_volume_conservation = bpy.props.FloatProperty(
+        name="kVC (Volume Conservation Coefficient)", default=0.05, min=0.01, max=0.1
+    )
 
-                  ToggleCollectionSelectionOperator
+    # Hardness properties
+    Object.ambf_soft_body_collision_hardness = bpy.props.FloatProperty(
+        name="kCHR (Collision Hardening Coefficient)", default=0.05, min=0.01, max=0.1
+    )
+
+    Object.ambf_soft_body_kinetic_hardness = bpy.props.FloatProperty(
+        name="kKHR (Kinetic Hardening Coefficient)", default=0.05, min=0.01, max=0.1
+    )
+
+    Object.ambf_soft_body_shear_hardness = bpy.props.FloatProperty(
+        name="kSHR (Shear Hardening Coefficient)", default=0.05, min=0.01, max=0.1
+    )
+
+    # Maximum volume property
+    Object.ambf_soft_body_max_volume = bpy.props.FloatProperty(
+        name="maxvolume (Maximum Volume)", default=0.75, min=0.5, max=1.0
+    )
+
+    # Timescale property
+    Object.ambf_soft_body_timescale = bpy.props.FloatProperty(
+        name="timescale (Timescale Factor)", default=1.0, min=0.5, max=1.5
+    )
+
+    # Iterations properties
+    Object.ambf_soft_body_velocity_iterations = bpy.props.IntProperty(
+        name="viterations (Velocity Iterations)", default=10, min=5, max=20
+    )
+
+    Object.ambf_soft_body_position_iterations = bpy.props.IntProperty(
+        name="piterations (Position Iterations)", default=10, min=5, max=20
+    )
+
+    Object.ambf_soft_body_deformation_iterations = bpy.props.IntProperty(
+        name="diterations (Deformation Iterations)", default=10, min=5, max=20
+    )
+
+    ambf_soft_body_collision_iterations = bpy.props.IntProperty(
+        name="citerations (Collision Iterations)", default=10, min=5, max=20
+    )
+
+    # Flags (additional settings)
+    Object.ambf_soft_body_flags = bpy.props.IntProperty(
+        name="flags (Additional Settings Flags)", default=0
+    )
+
+    # Cutting and clusters properties
+    Object.ambf_soft_body_cutting_enabled = bpy.props.BoolProperty(
+        name="enable_cutting (Cutting Capability)", default=False
+    )
+
+    Object.ambf_soft_body_clusters = bpy.props.IntProperty(
+        name="clusters (Number of Clusters)", default=0, min=0, max=10
+    )
+
+    # Fixed nodes (list of node indices)
+    Object.ambf_soft_body_fixed_nodes = bpy.props.StringProperty(
+        name="fixed nodes (Fixed Nodes)", default=""
+    )
+
+class SensorArrayItem(PropertyGroup):
+    bl_idname = "OBJECT_PT_sensor_array_item"
+    bl_label = "Sensor Array Item"
+    
+    offset: FloatVectorProperty(
+        name="Offset",
+        size=3,
+        subtype='XYZ',
+        default=(0.0, 0.0, 0.0)
+    )
+    direction: FloatVectorProperty(
+        name="Direction",
+        size=3,
+        subtype='XYZ',
+        default=(0.0, -1.0, 0.0)
+    )
+
+# Define SensorProperties with ambf_sensor_array using SensorArrayItem
+class SensorProperties(PropertyGroup):
+    bl_idname = "OBJECT_PT_sensor_properties"
+    bl_label = "Sensor Properties"
+
+    ambf_sensor_type: EnumProperty(
+        items=[
+            ('Proximity', 'Proximity', '', '', 0),
+            ('Resistance', 'Resistance', '', '', 1),
+            ('Contact', 'Contact', '', '', 2),
+        ],
+        name="Type",
+        default='Proximity'
+    )
+    
+    ambf_sensor_enable_frequency: BoolProperty(
+        name="Enable Frequency",
+        default=False
+    )
+
+    ambf_sensor_frequency: FloatProperty(
+        name="Frequency", 
+        default=1.0, 
+        min=0.0
+    )
+    
+    ambf_object_visible: BoolProperty(
+        name="Visible",
+        default=False
+    )
+    
+    ambf_object_visible_size: FloatProperty(
+        name="Visible Size",
+        default=1.0,
+        min=0.0
+    )
+
+    # Proximity Sensor Properties
+    ambf_sensor_range: FloatProperty(
+        name="Range",
+        default=0.1,
+        min=0.0
+    )
+    
+    # Sensor Array Collection for Proximity Sensor
+    ambf_sensor_array: CollectionProperty(
+        type=SensorArrayItem,
+        name="Array"
+    )
+
+    # Resistance Sensor Properties
+    ambf_sensor_friction_static: FloatProperty(
+        name="Static Friction",
+        default=0.0,
+        min=0.0
+    )
+
+    ambf_sensor_friction_damping: FloatProperty(
+        name="Damping Friction",
+        default=0.0,
+        min=0.0
+    )
+
+    ambf_sensor_friction_dynamic: FloatProperty(
+        name="Dynamic Friction",
+        default=0.0,
+        min=0.0
+    )
+
+    ambf_sensor_friction_variable: BoolProperty(
+        name="Variable Friction",
+        default=False
+    )
+
+    ambf_sensor_contact_area: FloatProperty(
+        name="Contact Area",
+        default=0.0,
+        min=0.0
+    )
+
+    ambf_sensor_contact_stiffness: FloatProperty(
+        name="Contact Stiffness",
+        default=0.0,
+        min=0.0
+    )
+
+    ambf_sensor_contact_damping: FloatProperty(
+        name="Contact Damping",
+        default=0.0,
+        min=0.0
+    )
+
+    # Contact Sensor Properties
+    ambf_sensor_distance_threshold: FloatProperty(
+        name="Distance Threshold",
+        default=0.0,
+        min=0.0
+    )
+
+    ambf_sensor_process_contact_details: BoolProperty(
+        name="Process Contact Details",
+        default=False
+    )
+
+custom_classes = (
+        AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
+        AMBF_PG_CollisionShapePropGroup,
+
+        AMBF_OT_cleanup_all,
+        AMBF_OT_ambf_rigid_body_cleanup,
+        AMBF_OT_ambf_constraint_cleanup,
+        AMBF_OT_ambf_collision_shape_cleanup,
+        AMBF_OT_select_all,
+        AMBF_OT_hide_passive_joints,
+        AMBF_OT_hide_all_joints,
+
+        OBJECT_PT_Geometry_Main_Panel,
+        OBJECT_PT_Camera_Panel,
+        OBJECT_PT_Workspace_Main_Panel,
+        AddCube,
+        AddSphere,
+        AddCylinder,
+        DeleteAllObjects,
+        DeleteSelectedObjects,
+        SetActiveCamera,
+        CleanWorkspace,
+
+        AMBF_OT_remove_low_res_mesh_modifiers,
+        AMBF_OT_generate_low_res_mesh_modifiers,
+        AMBF_OT_generate_ambf_file,
+        AMBF_OT_save_meshes,
+        AMBF_OT_load_ambf_file,
+
+        AMBF_OT_create_joint,
+        AMBF_OT_create_sensor,
+        AMBF_OT_add_sensor_array_item,
+        AMBF_OT_remove_sensor_array_item,
+        AMBF_OT_create_actuator,
+
+        AMBF_OT_remove_object_namespaces,
+        AMBF_OT_estimate_inertial_offsets,
+        AMBF_OT_estimate_shape_offsets,
+        AMBF_OT_ambf_collision_shape_add,
+        AMBF_OT_ambf_collision_shape_remove,
+        AMBF_OT_estimate_collision_shapes_geometry,
+        AMBF_OT_estimate_inertias,
+        AMBF_OT_estimate_joint_controller_gains,
+        AMBF_OT_auto_rename_joints,
+        AMBF_OT_estimate_inertial_offset_per_object,
+        AMBF_OT_estimate_shape_offset_per_object,
+        AMBF_OT_estimate_collision_shape_geometry_per_object,
+        AMBF_OT_estimate_inertia_per_object,
+        AMBF_OT_estimate_joint_controller_gain_per_object,
+        AMBF_OT_auto_rename_joint_per_object,
+
+        AMBF_OT_ambf_rigid_body_activate,
+        AMBF_OT_ambf_ghost_object_activate,
+        AMBF_OT_ambf_soft_body_activate,
+        AMBF_OT_ambf_constraint_activate,
+        AMBF_OT_ambf_camera_activate,
+        AMBF_OT_ambf_light_activate,
+        AMBF_OT_ambf_sensor_activate,
+        AMBF_OT_ambf_actuator_activate, 
+
+        OBJECT_PT_DebuggerPanel,
+
+        AMBF_PT_main_panel,
+        CollectionSelectorPanel,
+        AMBF_PT_ambf_rigid_body,
+        AMBF_PT_ambf_ghost_object,
+        AMBF_PT_ambf_soft_body,
+        AMBF_PT_ambf_constraint,
+        AMBF_PT_ambf_actuator,
+        AMBF_PT_ambf_sensor,
+        AMBF_PT_ambf_camera,
+        AMBF_PT_ambf_light,
+
+        AMBF_OT_ambf_move_collision_mesh_to_body_origin,
+        AMBF_OT_ambf_collision_mesh_use_current_location,
+
+        ToggleCollectionSelectionOperator,
+        ActivateCollectionOperator,
+        DeleteCollectionOperator,
+        AddCollectionOperator,
+        SoftBodyProperties,
+        SensorArrayItem,
+        SensorProperties
 )
-
 
 def register():
 
@@ -5042,12 +5845,27 @@ def register():
     for cls in custom_classes:
         register_class(cls)
     
+    ''' COLLECTION PROPERTIES'''
     bpy.types.Scene.selected_collections = bpy.props.StringProperty(
         name="Selected Collections",
         description="Comma-separated list of selected collection names",
         default="",
         update=update_selected_collections
     )
+
+    bpy.types.Scene.new_collection_name = bpy.props.StringProperty(
+    name="New Collection Name",
+    description="Name of the new collection",
+    default="New Collection"
+    )
+
+    bpy.types.Scene.active_collection_name = bpy.props.StringProperty(
+    name="Active Collection Name",
+    description="Name of the active collection",
+    default=""
+    )
+    
+    bpy.app.handlers.depsgraph_update_post.append(ensure_active_collection)
             
     Object.ambf_object_type = EnumProperty \
             (
@@ -5057,17 +5875,56 @@ def register():
                 ('NONE', 'None', '', '', 0),
                 ('RIGID_BODY', 'RIGID_BODY', '', '', 1),
                 ('GHOST_OBJECT', 'GHOST_OBJECT', '', '', 2),
-                ('CONSTRAINT', 'CONSTRAINT', '', '', 3),
-                ('COLLISION_SHAPE', 'COLLISION_SHAPE', '', '', 4),
-                ('CAMERA', 'CAMERA', '', '', 5),
-                ('LIGHT', 'LIGHT', '', '', 6), 
-                ('SENSOR', 'SENSOR', '', '', 7),
-                ('ACTUATOR', 'ACTUATOR', '', '', 8),
-                ('SOFT_BODY', 'SOFT_BODY', '', '', 9),
+                ('SOFT_BODY', 'SOFT_BODY', '', '', 3),
+                ('CONSTRAINT', 'CONSTRAINT', '', '', 4),
+                ('COLLISION_SHAPE', 'COLLISION_SHAPE', '', '', 5),
+                ('CAMERA', 'CAMERA', '', '', 6),
+                ('LIGHT', 'LIGHT', '', '', 7), 
+                ('SENSOR', 'SENSOR', '', '', 8),
+                ('ACTUATOR', 'ACTUATOR', '', '', 9),
             ],
             default='NONE'
         )
+    
+    ''' LIGHT PROPERTIES'''
+    Object.ambf_light_namespace = StringProperty(name="Namespace", default="")
 
+    Object.ambf_light_spot_exponent = bpy.props.FloatProperty(
+        name="Spot Exponent",
+        description="Custom spot exponent for AMBF lights",
+        default=1.0,
+        min=0.0,
+        max=128.0
+    )
+
+    Object.ambf_light_shadow_quality = bpy.props.IntProperty(
+        name="Shadow Quality",
+        description="Custom shadow quality for AMBF lights",
+        default=1,
+        min=0,
+        max=10
+    )
+
+    Object.ambf_light_cutoff_angle = bpy.props.FloatProperty(
+        name="Cutoff Angle",
+        description="Custom cutoff angle for AMBF lights",
+        default=1.7,
+        min=0.0,
+        max=3.14159  # Maximum value is pi radians (~180 degrees)
+    )
+
+    Object.ambf_light_constant_attenuation = bpy.props.FloatProperty(
+    name="Constant Attenuation",
+    description="Custom constant attenuation for AMBF lights",
+    default=1.0,  
+    min=0.0, 
+    max=10.0  
+)
+    ''' GHOST OBJECT PROPERTIES'''  
+    ''' SOFT BODY PROPERTIES'''
+    Object.ambf_soft_body_properties = PointerProperty(type=SoftBodyProperties)
+    
+    ''' RIGID BODY PROPERTIES'''
     Object.ambf_rigid_body_namespace = StringProperty(name="Namespace", default="")
 
     Object.ambf_rigid_body_mass = FloatProperty(name="mass", default=1.0, min=0.0001)
@@ -5165,7 +6022,8 @@ def register():
             name="Publish Joint Positions",
             default=False
         )
-
+    
+    ''' OBJECT PROPERTIES'''
     Object.ambf_object_override_gravity = BoolProperty \
             (
             name="Override Object Gravity",
@@ -5233,6 +6091,7 @@ def register():
             subtype='LAYER'
         )
     
+    ''' CONSTRAINT PROPERTIES'''
     Object.ambf_constraint_type = EnumProperty \
             (
             items=
@@ -5399,7 +6258,14 @@ def register():
             default='VELOCITY',
             description='The output of the controller fed to the simulation. Better to use (VELOCITY) with P <= 10, D <= 1'
         )
+    
+    ''' ACTUATOR PROPERTIES'''
+    #TODO: Add Actuator Properties
 
+    ''' SENSOR PROPERTIES'''
+    bpy.types.Object.ambf_sensor_properties = bpy.props.PointerProperty(type=SensorProperties)
+    
+    ''' SCENARIO PROPERTIES'''
     Scene.ambf_adf_path = StringProperty \
             (
             name="Config (Save To)",
@@ -5529,7 +6395,9 @@ def unregister():
     for cls in reversed(custom_classes):
         unregister_class(cls)
     del bpy.types.Scene.selected_collections
-
+    del bpy.types.Scene.new_collection_name
+    del bpy.types.Scene.active_collection_name
+    bpy.app.handlers.depsgraph_update_post.remove(ensure_active_collection)
 
 if __name__ == "__main__":
     print("\n\n########## STARTING ##########")
