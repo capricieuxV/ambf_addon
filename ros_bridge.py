@@ -61,22 +61,44 @@ class ServiceROS(bpy.types.Operator):
                     return obj
         return None
         
+    # def update_objects(self, context):
+    #     obj_names = self._client.get_obj_names()
+    #     print(f"Found {len(obj_names)} objects in AMBF")
+    #     obj_names = ["/ambf/env/base_link", "/ambf/env/yaw_link"]
+    #     for ambf_name in obj_names:
+    #         normalized_name = normalize_name(ambf_name.split('/')[-1])
+    #         obj = find_object_by_normalized_name(normalized_name)
+    #         print(f"Found object {obj} for {ambf_name}")
+    #         handle = self._client.get_obj_handle(ambf_name)
+    #         if handle is not None and obj is not None:
+    #             pose = handle.get_pose()
+    #             obj.location = mathutils.Vector(pose[:3])
+    #             obj.rotation_euler = mathutils.Euler(pose[3:], 'XYZ')
+    #             print(f"Updated object {obj} with pose {pose}")
+    #         else:
+    #             print(f"Failed to get AMBF handle for {ambf_name}")
+
     def update_objects(self, context):
         obj_names = self._client.get_obj_names()
         print(f"Found {len(obj_names)} objects in AMBF")
-        obj_names = ["/ambf/env/base_link", "/ambf/env/yaw_link"]
+        
         for ambf_name in obj_names:
             normalized_name = normalize_name(ambf_name.split('/')[-1])
             obj = find_object_by_normalized_name(normalized_name)
-            print(f"Found object {obj} for {ambf_name}")
+            print(f"Looking for object matching: {normalized_name}")
             handle = self._client.get_obj_handle(ambf_name)
-            if handle is not None and obj is not None:
+            
+            if handle and obj:
                 pose = handle.get_pose()
                 obj.location = mathutils.Vector(pose[:3])
                 obj.rotation_euler = mathutils.Euler(pose[3:], 'XYZ')
-                print(f"Updated object {obj} with pose {pose}")
+                print(f"Updated {obj.name} to location {pose[:3]} and rotation {pose[3:]}")
             else:
-                print(f"Failed to get AMBF handle for {ambf_name}")
+                if not handle:
+                    print(f"Failed to get AMBF handle for {ambf_name}")
+                if not obj:
+                    print(f"No matching object found in Blender for {normalized_name}")
+
 
     def cancel(self, context):
         if self._timer:

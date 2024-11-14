@@ -53,24 +53,42 @@ class BodyTemplate:
         #                                  'angular': {'P': 1000, 'I': 0, 'D': 1}}
         self._adf_data['color'] = 'random'
 
-
 # Body Template for the some commonly used of afBody's data
 # No collision with this object
-class GhostObjectTemplate: 
+class GhostObjectTemplate:
     def __init__(self):
         self._adf_data = OrderedDict()
         self._adf_data['name'] = ""
+        # self._adf_data['namespace'] = ""
+        self._adf_data['parent'] = ""
         self._adf_data['mesh'] = ""
-        self._adf_data['collision mesh'] = ""
-        self._adf_data['collision mesh type'] = ""
-        self._adf_data['collision margin'] = 0.001
-        self._adf_data['scale'] = 1.0
+        self._adf_data['shape'] = ""
+        # self._adf_data['geometry'] = "*shape_geometry" # Default to whatever is defined as pointer
+        self._adf_data['geometry'] = get_xyz_ordered_dict()
         self._adf_data['location'] = get_pose_ordered_dict()
+        self._adf_data['location']['position'] = get_xyz_ordered_dict()  
+        self._adf_data['location']['orientation'] = get_rpy_ordered_dict() 
+        self._adf_data['scale'] = 1.0
         self._adf_data['passive'] = False
+        
+        # self._adf_data['high resolution path'] = ""
+        # self._adf_data['low resolution path'] = ""
+        
+        self._adf_data['collision mesh type'] = "CONVEX_HULL" # Default to convex hull
+        self._adf_data['collision margin'] = 0.001
+        self._adf_data['collision group'] = []
+        self._adf_data['collision shape'] = "BOX" # Default to box
+        self._adf_data['collision geometry'] = get_xyz_ordered_dict()
+        # self._adf_data['collision geometry'] = "*box_geometry" # Default to box
+        # self._adf_data['compound shape'] = []
+        # self._adf_data['collision offset'] = get_xyz_ordered_dict() 
+        # self._adf_data['compound collision shape'] = []
+        # self._adf_data['publish frequency'] = 0.0
 
-        self._adf_data['color'] = 'random'
-
-
+        self._adf_data['color components'] = {'ambient': {'level': 1.0}, 'diffuse': {'r': 0.5, 'g': 0.5, 'b':0.5}, 'specular': {'r': 0.5, 'g': 0.05, 'b':0.05}, 'transparency': 1.0}
+        # self._adf_data['color'] = 'random'
+        # self._adf_data['color rgba'] = {'r': 1.0, 'g': 1.0, 'b': 1.0, 'a': 1.0}
+        
 # Joint Template for the some commonly used of afJoint's data
 class JointTemplate:
     def __init__(self):
@@ -353,7 +371,6 @@ def update_global_namespace(context):
         CommonConfig.namespace += '/'
         context.scene.ambf_namespace += CommonConfig.namespace
 
-
 def set_global_namespace(context, namespace):
     CommonConfig.namespace = namespace
     if CommonConfig.namespace[-1] != '/':
@@ -414,6 +431,8 @@ def compare_namespace_with_global(fullname):
 def add_namespace_prefix(name):
     return CommonConfig.namespace + name
 
+def normalize_name(name):
+    return name.replace(' ', '').lower()
 
 def get_grand_parent(body):
     grand_parent = body
@@ -421,7 +440,6 @@ def get_grand_parent(body):
         # print('GRAND PARENT: ', grand_parent.name)
         grand_parent = grand_parent.parent
     return grand_parent
-
 
 def downward_tree_pass(body, _heirarichal_bodies_list, _added_bodies_list):
     if body is None or _added_bodies_list[body] is True:
@@ -434,7 +452,6 @@ def downward_tree_pass(body, _heirarichal_bodies_list, _added_bodies_list):
 
         for child in body.children:
             downward_tree_pass(child, _heirarichal_bodies_list, _added_bodies_list)
-
 
 def populate_heirarchial_tree():
     # Create a dict with {body, added_flag} elements
@@ -492,23 +509,27 @@ bpy.types.Scene.selected_collections = bpy.props.StringProperty(
     update=update_selected_collections
 )
 
+def find_object_by_normalized_name(normalized_name):
+    for obj in bpy.data.objects:
+        name = obj.name.split('/')[-1].replace(' ', '').lower()
+        if normalize_name(name) == normalized_name:
+            return obj
+    return None
+
 def select_object(obj_handle, select=True):
     # print(obj_handle.name)
     obj_handle.select_set(select)
-
 
 def select_objects(obj_handles, select=True):
     # print('SELECTING OBJECTS: ', len(obj_handles))
     for obj_handle in obj_handles:
         select_object(obj_handle, select)
 
-
 def select_all_objects(select):
     # print('SELECTING ALL OBJECTS: ', len(bpy.data.objects))
     # First deselect all objects
     for obj_handle in bpy.data.objects:
         select_object(obj_handle, select)
-
 
 def hide_object(object, hide):
     # print('HIDING OBJECT: ', object.name)
@@ -524,16 +545,13 @@ def is_object_hidden(object):
         raise ValueError
     return hidden
 
-
 def get_active_object():
     active_obj_handle = bpy.context.active_object
     return active_obj_handle
 
-
 def set_active_object(active_object):
    # bpy.context.scene.objects.active = active_object
     bpy.context.view_layer.objects.active = active_object
-
 
 def get_selected_objects():
     return bpy.context.selected_objects
@@ -546,14 +564,12 @@ def make_obj1_parent_of_obj2(obj1, obj2):
         set_active_object(obj1)
         bpy.ops.object.parent_set(keep_transform=True)
 
-
 def get_xyz_ordered_dict():
     xyz = OrderedDict()
     xyz['x'] = 0
     xyz['y'] = 0
     xyz['z'] = 0
     return xyz
-
 
 def get_rpy_ordered_dict():
     rpy = OrderedDict()
@@ -562,13 +578,11 @@ def get_rpy_ordered_dict():
     rpy['y'] = 0
     return rpy
 
-
 def get_pose_ordered_dict():
     pose = OrderedDict()
     pose['position'] = get_xyz_ordered_dict()
     pose['orientation'] = get_rpy_ordered_dict()
     return pose
-
 
 # For shapes such as Cylinder, Cone and Ellipse, this function returns
 # the major axis by comparing the dimensions of the bounding box
@@ -586,7 +600,6 @@ def get_major_axis(dims):
 
     return axis[axis_idx], axis_idx
 
-
 def get_axis_str(axis_idx):
     axis_str = None
     if axis_idx == 0:
@@ -597,7 +610,6 @@ def get_axis_str(axis_idx):
         axis_str = 'Z'
 
     return axis_str
-
 
 def get_axis_idx(axis_str):
     axis_idx = None
@@ -610,7 +622,6 @@ def get_axis_idx(axis_str):
 
     return axis_idx
 
-
 def get_axis_vec_from_str(axis_str):
     axis_str = axis_str.upper()
     axis_vec = mathutils.Vector((0, 0, 0))
@@ -621,7 +632,6 @@ def get_axis_vec_from_str(axis_str):
     elif axis_str == 'Z':
         axis_vec[2] = 1.0
     return axis_vec
-
 
 # For shapes such as Cylinder, Cone and Ellipse, this function returns
 # the median axis (not-major and non-minor or the middle axis) by comparing
@@ -636,7 +646,6 @@ def get_median_axis(dims):
     axis_idx = med_axis_idx.index(max(med_axis_idx))
 
     return axis[axis_idx], axis_idx
-
 
 # For shapes such as Cylinder, Cone and Ellipse, this function returns
 # the minor axis by comparing the dimensions of the bounding box
@@ -654,7 +663,6 @@ def get_minor_axis(dims):
     median_idx = sort_idx.index(max(sort_idx))
     return axis[median_idx], median_idx
 
-
 # Courtesy of:
 # https://blender.stackexchange.com/questions/62040/get-center-of-geometry-of-an-object
 def compute_local_com(obj_handle):
@@ -665,7 +673,6 @@ def compute_local_com(obj_handle):
     for i in range(0, 3):
         center[i] = center[i] * obj_handle.scale[i]
     return center
-
 
 def estimate_joint_controller_gain(obj_handle):
     if obj_handle.ambf_object_type == 'CONSTRAINT':
@@ -723,7 +730,6 @@ def estimate_joint_controller_gain(obj_handle):
                 obj_handle.ambf_constraint_controller_i_gain = Ki
                 obj_handle.ambf_constraint_controller_d_gain = Kd
 
-
 def inertia_of_mesh(obj_handle, mass=None):
     if mass == None:
         mass = obj_handle.ambf_rigid_body_mass
@@ -736,7 +742,6 @@ def inertia_of_mesh(obj_handle, mass=None):
         I[1] = I[1] + dm * (v.co[0]*v.co[0] + v.co[2] * v.co[2])
         I[2] = I[2] + dm * (v.co[0]*v.co[0] + v.co[1] * v.co[1])
     return I
-
 
 def inertia_of_box(mass, lx, ly, lz):
     I = mathutils.Vector((0, 0, 0))
@@ -976,7 +981,6 @@ def add_collision_shape_property(obj_handle, shape_type=None):
     collision_shape_create_visual(obj_handle, prop_tuple[1])
     return prop_tuple[1]
 
-
 def remove_collision_shape_property(obj_handle, idx=None):
     cnt = len(obj_handle.ambf_collision_shape_prop_collection.items())
     if idx is None:
@@ -992,9 +996,8 @@ def remove_collision_shape_property(obj_handle, idx=None):
     bpy.data.objects.remove(coll_shape_obj_handle)
     obj_handle.ambf_collision_shape_prop_collection.remove(cnt - 1)
 
-
 def estimate_collision_shape_geometry(obj_handle):
-    if obj_handle.ambf_object_type == 'RIGID_BODY':
+    if obj_handle.ambf_object_type == 'RIGID_BODY' or obj_handle.ambf_object_type == 'GHOST_OBJECT' or obj_handle.ambf_object_type == 'SOFT_BODY':
 
         if len(obj_handle.ambf_collision_shape_prop_collection.items()) == 0:
             add_collision_shape_property(obj_handle)
@@ -1003,6 +1006,7 @@ def estimate_collision_shape_geometry(obj_handle):
         if obj_handle.ambf_collision_type in ['MESH', 'SINGULAR_SHAPE']:
             dims = obj_handle.dimensions.copy()
             prop_group = obj_handle.ambf_collision_shape_prop_collection.items()[0][1]
+            print('Estimating Collision Shape Geometry for: ', obj_handle.ambf_collision_shape_prop_collection.items())
             # Now we need to find out the geometry of the shape
             if prop_group.ambf_collision_shape == 'BOX':
                 prop_group.ambf_collision_shape_disable_update_cbs = True
@@ -1019,7 +1023,6 @@ def estimate_collision_shape_geometry(obj_handle):
                 prop_group.ambf_collision_shape_radius = dims[median_ax_idx] / 2.0
                 prop_group.ambf_collision_shape_height = dims[major_ax_idx]
                 prop_group.ambf_collision_shape_axis = major_ax_char.upper()
-                
 
 def collision_shape_update_dimensions(shape_prop):
     if shape_prop.ambf_collision_shape_disable_update_cbs:
@@ -1061,7 +1064,6 @@ def collision_shape_update_dimensions(shape_prop):
             coll_shape_obj_handle.scale[(dir_axis + 1) % 3] = scale_old[(dir_axis + 1) % 3] * radius / radius_old * 2
             coll_shape_obj_handle.scale[(dir_axis + 2) % 3] = scale_old[(dir_axis + 2) % 3] * radius / radius_old * 2
 
-
 def collision_shape_update_local_offset(obj_handle, shape_prop):
     if shape_prop.ambf_collision_shape_disable_update_cbs:
         return
@@ -1087,10 +1089,8 @@ def collision_shape_update_local_offset(obj_handle, shape_prop):
     coll_shape_obj_handle.matrix_world = T_p_w @ T_c_p
     coll_shape_obj_handle.scale = scale_old
     
-
 def set_3d_cursor_location(location):
     bpy.context.scene.cursor.location = location
-
 
 def collision_shape_create_visual(obj_handle, shape_prop_group):
     cur_active_obj_handle = get_active_object()
@@ -1286,6 +1286,8 @@ class AMBF_OT_generate_ambf_file(Operator):
 
     def __init__(self):
         self._body_names_list = []
+        self._ghost_object_names_list = []
+        self._soft_body_names_list = []
         self._joint_names_list = []
         self._camera_names_list = []
         self._light_names_list = []
@@ -1330,9 +1332,95 @@ class AMBF_OT_generate_ambf_file(Operator):
     # This method add the actuator prefix if set to all the actuators in AMBF
     def add_actuator_prefix_str(self, urdf_actuator_str):
         return self.actuator_name_prefix + urdf_actuator_str
+
+    def generate_body_data_from_ambf_ghost_object(self, adf_data, body_obj_handle):
+        if body_obj_handle.ambf_object_type != 'GHOST_OBJECT':
+            return
+
+        # The object is unlinked from the scene. Don't write it
+        if self._context.scene.objects.get(body_obj_handle.name) is None:
+            return
+
+        if is_object_hidden(body_obj_handle):
+            return
+        
+        print('Generating Ghost Object: ', body_obj_handle.name)
+        ghost = GhostObjectTemplate()
+        ghost_data = ghost._adf_data
+
+        if not compare_namespace_with_global(body_obj_handle.name):
+            if get_namespace(body_obj_handle.name) != '':
+                ghost_data['namespace'] = get_namespace(body_obj_handle.name)
+
+        body_obj_handle_name = remove_namespace_prefix(body_obj_handle.name)
+        ghost_yaml_name = self.add_body_prefix_str(body_obj_handle_name)
+        output_mesh = bpy.context.scene.ambf_meshes_save_type
+        ghost_data['name'] = body_obj_handle_name
+        if body_obj_handle.ambf_object_parent:
+            ghost_data['parent'] = body_obj_handle.ambf_object_parent
+        ghost_pose = body_obj_handle.matrix_world
+        ghost_data['location'] = {'position': {'x': ambf_round(ghost_pose.translation.x),
+                                              'y': ambf_round(ghost_pose.translation.y),
+                                              'z': ambf_round(ghost_pose.translation.z)},
+                                'orientation': {'r': ambf_round(ghost_pose.to_euler().x),
+                                                'p': ambf_round(ghost_pose.to_euler().y),
+                                                'y': ambf_round(ghost_pose.to_euler().z)}}
+
+        # Populate geometry and collision properties from the object handle
+        # if body_obj_handle.type == 'MESH':
+
+        ghost_data['mesh'] = body_obj_handle_name + '.' + output_mesh
+        ghost_data['shape'] = body_obj_handle.ambf_ghost_shape
+        ghost_data['geometry'] = {'x': body_obj_handle.dimensions[0], 'y': body_obj_handle.dimensions[1], 'z': body_obj_handle.dimensions[2]}
+        if body_obj_handle.ambf_collision_margin_enable is True:
+            ghost_data['collision margin'] = ambf_round(body_obj_handle.ambf_collision_margin)
+        # ghost_data['collision shape'] = body_obj_handle.ambf_collision_shape
+        # ghost_data['collision geometry'] = body_obj_handle.ambf_ghost_collision_geometry
+        # ghost_data['collision group'] = body_obj_handle.ambf_collision_groups
+
+        ghost_data['collision mesh type'] = body_obj_handle.ambf_collision_mesh_type
+        ghost_data['collision group'] = [idx for idx, chk in enumerate(body_obj_handle.ambf_collision_groups) if chk == True]
+        ghost_data['collision geometry'] = {
+            'x': body_obj_handle.ambf_ghost_collision_geometry[0],
+            'y': body_obj_handle.ambf_ghost_collision_geometry[1],
+            'z': body_obj_handle.ambf_ghost_collision_geometry[2]
+        } if body_obj_handle.ambf_ghost_collision_geometry else {'x': 0.0, 'y': 0.0, 'z': 0.0}
+
+        # TODO: handle the case ambf_collision_shape is various shapes
+        
+        ghost_data['scale'] = body_obj_handle.ambf_scale
+        ghost_data['passive'] = body_obj_handle.ambf_body_passive
+        ghost_data['transparency'] = body_obj_handle.ambf_body_transparency
+
+        # Populate color components
+        ghost_data['color components'] = {
+            'ambient': {
+                'level': body_obj_handle.ambf_ghost_ambient_level,
+            },
+            'diffuse': {
+                'r': body_obj_handle.ambf_ghost_diffuse_color[0],
+                'g': body_obj_handle.ambf_ghost_diffuse_color[1],
+                'b': body_obj_handle.ambf_ghost_diffuse_color[2]
+            },
+            'specular': {
+                'r': body_obj_handle.ambf_ghost_specular_color[0],
+                'g': body_obj_handle.ambf_ghost_specular_color[1],
+                'b': body_obj_handle.ambf_ghost_specular_color[2]
+            },
+            'transparency': body_obj_handle.ambf_body_transparency
+        }
+
+        adf_data[ghost_yaml_name] = ghost_data
+        self._ghost_object_names_list.append(ghost_yaml_name)
     
     # def generate_body_data_from_ambf_soft_body(self, adf_data, body_obj_handle):
-    #     return
+    #     if body_obj_handle.ambf_object_type != 'SOFT_BODY':
+    #         return
+        
+    #     # The object is unlinked from the scene. Don't write it
+    #     if self._context.scene.objects.get(body_obj_handle.name) is None:
+    #         return
+        
 
     def generate_body_data_from_ambf_rigid_body(self, adf_data, body_obj_handle):
 
@@ -1346,6 +1434,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         if is_object_hidden(body_obj_handle) is True:
             return
 
+        print('Generating Rigid Body: ', body_obj_handle.name)
         body = BodyTemplate()
         body_data = body._adf_data
 
@@ -1359,8 +1448,8 @@ class AMBF_OT_generate_ambf_file(Operator):
         output_mesh = bpy.context.scene.ambf_meshes_save_type
         body_data['name'] = body_obj_handle_name
         
-        body_data['passive'] = body_obj_handle.ambf_rigid_body_passive
-        if body_obj_handle.ambf_rigid_body_passive:
+        body_data['passive'] = body_obj_handle.ambf_body_passive
+        if body_obj_handle.ambf_body_passive:
             body_data['publish children names'] = False
             body_data['publish joint names'] = False
             body_data['publish joint positions'] = False
@@ -1784,6 +1873,8 @@ class AMBF_OT_generate_ambf_file(Operator):
         sensor_obj_handle_name = remove_namespace_prefix(sensor_obj_handle.name)
         sensor_yaml_name = self.add_sensor_prefix_str(sensor_obj_handle_name)
         sensor_data['name'] = sensor_obj_handle_name
+        
+        # sensor_data['parent'] = sensor_obj_handle.ambf_object_parent #TODO: Fix parent not set issue
 
         # Define location with position and orientation
         world_pos = sensor_obj_handle.matrix_world.translation
@@ -2150,6 +2241,8 @@ class AMBF_OT_generate_ambf_file(Operator):
         self._adf = OrderedDict()
         
         self._adf['bodies'] = []
+        self._adf['ghost objects'] = []
+        self._adf['soft bodies'] = []
         self._adf['joints'] = []
         self._adf['cameras'] = []
         self._adf['lights'] = []
@@ -2184,6 +2277,8 @@ class AMBF_OT_generate_ambf_file(Operator):
 
         for obj_handle in _heirarichal_objects_list:
             self.generate_body_data_from_ambf_rigid_body(self._adf, obj_handle)
+            self.generate_body_data_from_ambf_ghost_object(self._adf, obj_handle)
+            # self.generate_body_data_from_ambf_soft_body(self._adf, obj_handle)
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
             self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
             self.generate_light_data_from_ambf_light(self._adf, obj_handle)
@@ -2192,11 +2287,15 @@ class AMBF_OT_generate_ambf_file(Operator):
 
         # Now populate the tags
         self._adf['bodies'] = self._body_names_list
+        self._adf['ghost objects'] = self._ghost_object_names_list
+        self._adf['soft bodies'] = self._soft_body_names_list
         self._adf['joints'] = self._joint_names_list
         self._adf['cameras'] = self._camera_names_list
         self._adf['lights'] = self._light_names_list
         self._adf['sensors'] = self._sensor_names_list
         self._adf['actuators'] = self._actuator_names_list
+
+        print('ADF Data: ', self._adf)
         
         yaml.dump(self._adf, output_file)
 
@@ -2294,34 +2393,33 @@ class AMBF_OT_save_meshes(Operator):#
                                 im.save_render(_save_as)
 
     def save_body_meshes(self, context, obj_handle, mesh_type, high_res_path, low_res_path):
-        if not obj_handle.ambf_object_type == 'RIGID_BODY':
-            # Only Save Meshes if the object type is ambf rigid body
-            print("Object Type is not Rigid Body, Skipping Mesh Save")
-            return
+        if obj_handle.ambf_object_type == 'RIGID_BODY' or obj_handle.ambf_object_type == 'SOFT_BODY' or obj_handle.ambf_object_type == 'GHOST_OBJECT':
+            obj_handle_name = remove_namespace_prefix(obj_handle.name)
 
-        obj_handle_name = remove_namespace_prefix(obj_handle.name)
+            if obj_handle.type == 'MESH':
+                print("Saving Mesh for Rigid Body: ", obj_handle.name)
+                # SAVE HIGH RES / VISUAL MESHES FIRST
+                if context.scene.ambf_save_high_res:
+                    print("Saving High Res Mesh for Object: ", obj_handle.name)
+                    filename_high_res = os.path.join(high_res_path, obj_handle_name)
+                    save_blender_mesh(obj_handle, filename_high_res, mesh_type, False)
 
-        if obj_handle.type == 'MESH':
-            print("Saving Mesh for Rigid Body: ", obj_handle.name)
-            # SAVE HIGH RES / VISUAL MESHES FIRST
-            if context.scene.ambf_save_high_res:
-                print("Saving High Res Mesh for Object: ", obj_handle.name)
-                filename_high_res = os.path.join(high_res_path, obj_handle_name)
-                save_blender_mesh(obj_handle, filename_high_res, mesh_type, False)
-
-            # NOW SAVE LOW RES MESHES
-            if context.scene.ambf_save_low_res:
-                print("Saving Low Res Mesh for Object: ", obj_handle.name)
-                if obj_handle.ambf_use_separate_collision_mesh:
-                    if obj_handle.ambf_collision_mesh:
-                        coll_mesh_name = remove_namespace_prefix(obj_handle.ambf_collision_mesh.name)
-                        filename_low_res = os.path.join(low_res_path, coll_mesh_name)
-                        save_blender_mesh(obj_handle.ambf_collision_mesh, filename_low_res, mesh_type, True)
+                # NOW SAVE LOW RES MESHES
+                if context.scene.ambf_save_low_res:
+                    print("Saving Low Res Mesh for Object: ", obj_handle.name)
+                    if obj_handle.ambf_use_separate_collision_mesh:
+                        if obj_handle.ambf_collision_mesh:
+                            coll_mesh_name = remove_namespace_prefix(obj_handle.ambf_collision_mesh.name)
+                            filename_low_res = os.path.join(low_res_path, coll_mesh_name)
+                            save_blender_mesh(obj_handle.ambf_collision_mesh, filename_low_res, mesh_type, True)
+                        else:
+                            print("ERROR! NO SEPARATE COLLISION MESH SET FOR OBJECT: ", obj_handle.name)
                     else:
-                        print("ERROR! NO SEPARATE COLLISION MESH SET FOR OBJECT: ", obj_handle.name)
-                else:
-                    filename_low_res = os.path.join(low_res_path, obj_handle_name)
-                    save_blender_mesh(obj_handle, filename_low_res, mesh_type, True)
+                        filename_low_res = os.path.join(low_res_path, obj_handle_name)
+                        save_blender_mesh(obj_handle, filename_low_res, mesh_type, True)
+        else:
+            print("Object Type is not Body, Skipping Mesh Save")
+            return
 
     def save_meshes(self, context):
         print("\nSaving Meshes......")
@@ -2628,7 +2726,6 @@ class AMBF_OT_estimate_collision_shape_geometry_per_object(Operator):
         estimate_collision_shape_geometry(context.object)
         return {'FINISHED'}
 
-
 class AMBF_OT_estimate_inertia_per_object(Operator):
     bl_idname = "ambf.estimate_inertia_per_object"
     bl_label = "Estimate Body Inertia"
@@ -2712,6 +2809,7 @@ class AMBF_OT_load_ambf_file(Operator):
             return path
 
     def load_ambf_mesh(self, body_data, body_id):
+        print('Loading Mesh for Body: ', body_data['name'])
 
         body_name = body_data['name']
 
@@ -2749,9 +2847,12 @@ class AMBF_OT_load_ambf_file(Operator):
 
         load_blender_mesh(self._context, mesh_filepath, body_name)
 
+        print('Loaded Mesh: ', body_name)
         mesh_obj = get_active_object()
+        print('Mesh Object: ', mesh_obj)
 
         if coll_mesh_obj:
+            print('Collision Mesh Object: ', coll_mesh_obj)
             make_obj1_parent_of_obj2(mesh_obj, coll_mesh_obj)
         return mesh_obj
 
@@ -3035,6 +3136,129 @@ class AMBF_OT_load_ambf_file(Operator):
 #            mat.alpha = body_data['color components']['transparency']
             obj_handle.data.materials.append(mat)
 
+    def load_ambf_ghost_body(self, body_data, obj_handle):
+        obj_handle.ambf_object_type = 'GHOST_OBJECT'
+
+        if 'name' in body_data:
+            obj_handle.name = body_data['name']
+
+        if 'parent' in body_data and body_data['parent']:
+            obj_handle.ambf_object_parent = body_data['parent']
+
+        if 'shape' in body_data:
+            obj_handle.ambf_ghost_shape = body_data['shape']
+
+        if 'geometry' in body_data:
+            geometry = body_data['geometry']
+            obj_handle.dimensions[0] = geometry.get('x', 1.0)
+            obj_handle.dimensions[1] = geometry.get('y', 1.0)
+            obj_handle.dimensions[2] = geometry.get('z', 1.0)
+
+        if 'location' in body_data:
+            location = body_data['location']
+            if 'position' in location:
+                position = location['position']
+                obj_handle.location.x = position.get('x', 0.0)
+                obj_handle.location.y = position.get('y', 0.0)
+                obj_handle.location.z = position.get('z', 0.0)
+            if 'orientation' in location:
+                orientation = location['orientation']
+                obj_handle.rotation_euler.x = orientation.get('r', 0.0)
+                obj_handle.rotation_euler.y = orientation.get('p', 0.0)
+                obj_handle.rotation_euler.z = orientation.get('y', 0.0)
+
+        if 'scale' in body_data:
+            obj_handle.ambf_scale = body_data['scale']
+
+        if 'passive' in body_data:
+            obj_handle.ambf_body_passive = body_data['passive']
+
+        if 'transparency' in body_data:
+            obj_handle.ambf_body_transparency = body_data['transparency']
+
+        if 'color components' in body_data:
+            color_components = body_data['color components']
+            if 'ambient' in color_components:
+                ambient = color_components['ambient']
+                obj_handle.ambf_ghost_ambient_level = ambient.get('level', 1.0)
+            if 'diffuse' in color_components:
+                diffuse = color_components['diffuse']
+                obj_handle.ambf_ghost_diffuse_color[0] = diffuse.get('r', 0.5)
+                obj_handle.ambf_ghost_diffuse_color[1] = diffuse.get('g', 0.5)
+                obj_handle.ambf_ghost_diffuse_color[2] = diffuse.get('b', 0.5)
+            if 'specular' in color_components:
+                specular = color_components['specular']
+                obj_handle.ambf_ghost_specular_color[0] = specular.get('r', 0.5)
+                obj_handle.ambf_ghost_specular_color[1] = specular.get('g', 0.5)
+                obj_handle.ambf_ghost_specular_color[2] = specular.get('b', 0.5)
+
+        if 'collision mesh type' in body_data:
+            obj_handle.ambf_collision_mesh_type = body_data['collision mesh type']
+        if 'collision margin' in body_data:
+            obj_handle.ambf_collision_margin = body_data['collision margin']
+            obj_handle.ambf_collision_margin_enable = True 
+        if 'collision shape' in body_data:
+            obj_handle.ambf_collision_shape = body_data['collision shape']
+            obj_handle.ambf_collision_type = 'SINGULAR_SHAPE'  
+
+        if 'collision geometry' in body_data:
+            collision_geometry = body_data['collision geometry']
+            obj_handle.ambf_ghost_collision_geometry[0] = collision_geometry.get('x', 1.0)
+            obj_handle.ambf_ghost_collision_geometry[1] = collision_geometry.get('y', 1.0)
+            obj_handle.ambf_ghost_collision_geometry[2] = collision_geometry.get('z', 1.0)
+
+        if 'collision group' in body_data:
+            collision_group = body_data['collision group']
+            for i in range(len(obj_handle.ambf_collision_groups)):
+                obj_handle.ambf_collision_groups[i] = False
+            for group in collision_group:
+                if 0 <= group < len(obj_handle.ambf_collision_groups):
+                    obj_handle.ambf_collision_groups[group] = True
+                else:
+                    print('WARNING: Collision group {} is out of bounds.'.format(group))
+
+        if not obj_handle.ambf_collision_shape_prop_collection:
+            add_collision_shape_property(obj_handle)
+
+        ocs = obj_handle.ambf_collision_shape_prop_collection.items()[0][1]
+        ocs.ambf_collision_shape = obj_handle.ambf_collision_shape
+
+        if ocs.ambf_collision_shape == 'BOX':
+            if 'collision geometry' in body_data:
+                ocs.ambf_collision_shape_xyz_dims[0] = collision_geometry.get('x', 1.0)
+                ocs.ambf_collision_shape_xyz_dims[1] = collision_geometry.get('y', 1.0)
+                ocs.ambf_collision_shape_xyz_dims[2] = collision_geometry.get('z', 1.0)
+        elif ocs.ambf_collision_shape == 'SPHERE':
+            if 'collision geometry' in body_data:
+                ocs.ambf_collision_shape_radius = collision_geometry.get('radius', 0.5)
+        elif ocs.ambf_collision_shape in ['CYLINDER', 'CONE', 'CAPSULE']:
+            if 'collision geometry' in body_data:
+                ocs.ambf_collision_shape_radius = collision_geometry.get('radius', 0.5)
+                ocs.ambf_collision_shape_height = collision_geometry.get('height', 1.0)
+                ocs.ambf_collision_shape_axis = collision_geometry.get('axis', 'Z').upper()
+
+        if 'collision offset' in body_data:
+            cso = body_data['collision offset']
+            if 'position' in cso:
+                position_offset = cso['position']
+                ocs.ambf_collision_shape_linear_offset[0] = position_offset.get('x', 0.0)
+                ocs.ambf_collision_shape_linear_offset[1] = position_offset.get('y', 0.0)
+                ocs.ambf_collision_shape_linear_offset[2] = position_offset.get('z', 0.0)
+            if 'orientation' in cso:
+                orientation_offset = cso['orientation']
+                ocs.ambf_collision_shape_angular_offset[0] = orientation_offset.get('r', 0.0)
+                ocs.ambf_collision_shape_angular_offset[1] = orientation_offset.get('p', 0.0)
+                ocs.ambf_collision_shape_angular_offset[2] = orientation_offset.get('y', 0.0)
+        else:
+            ocs.ambf_collision_shape_linear_offset[0] = 0.0
+            ocs.ambf_collision_shape_linear_offset[1] = 0.0
+            ocs.ambf_collision_shape_linear_offset[2] = 0.0
+            ocs.ambf_collision_shape_angular_offset[0] = 0.0
+            ocs.ambf_collision_shape_angular_offset[1] = 0.0
+            ocs.ambf_collision_shape_angular_offset[2] = 0.0
+
+        collision_shape_create_visual(obj_handle, ocs)
+        
     def load_ambf_rigid_body(self, body_data, obj_handle):
         if obj_handle.type in ['EMPTY', 'MESH']:
             obj_handle.ambf_rigid_body_mass = body_data['mass']
@@ -3183,7 +3407,7 @@ class AMBF_OT_load_ambf_file(Operator):
                         print('WARNING, Collision Group Outside [0-20]')
                         
             if 'passive' in body_data:
-                obj_handle.ambf_rigid_body_passive = body_data['passive']
+                obj_handle.ambf_body_passive = body_data['passive']
 
             # If Body Controller Defined. Set the P and D gains for linera and angular controller prop fields
             if 'controller' in body_data:
@@ -3240,33 +3464,21 @@ class AMBF_OT_load_ambf_file(Operator):
 
     def load_body(self, body_id):
         body_data = self._adf_data[body_id]
-
         obj_handle = self.load_ambf_mesh(body_data, body_id)
-
         self.load_object_name(body_data, obj_handle)
-
         self.load_ambf_rigid_body(body_data, obj_handle)
-
         self.load_body_location(body_data, obj_handle)
-
         self.load_material(body_data, obj_handle)
-
         self._blender_remapped_body_names[body_id] = obj_handle.name
         CommonConfig.loaded_body_map[obj_handle] = body_data
 
     def load_ghost(self, ghost_name):
         ghost_data = self._adf_data[ghost_name]
-
         obj_handle = self.load_ambf_mesh(ghost_data, ghost_name)
-
         self.load_object_name(ghost_data, obj_handle)
-
-        self.load_ambf_rigid_body(ghost_data, obj_handle)
-
+        self.load_ambf_ghost_body(ghost_data, obj_handle)
         self.load_body_location(ghost_data, obj_handle)
-
         self.load_material(ghost_data, obj_handle)
-
         self._blender_remapped_body_names[ghost_name] = obj_handle.name
         CommonConfig.loaded_body_map[obj_handle] = ghost_data
 
@@ -3655,6 +3867,11 @@ class AMBF_OT_load_ambf_file(Operator):
             bodies_list = self._adf_data['bodies']
         except:
             bodies_list = []
+        
+        try :
+            ghost_list = self._adf_data['ghost objects']
+        except:
+            ghost_list = []
 
         try:
             joints_list = self._adf_data['joints']
@@ -3703,6 +3920,10 @@ class AMBF_OT_load_ambf_file(Operator):
         for body_id in bodies_list:
             print('Loading Body: ', body_id)
             self.load_body(body_id)
+        
+        for ghost_name in ghost_list:
+            print('Loading Ghost: ', ghost_name)
+            self.load_ghost(ghost_name)
 
         for joint_name in joints_list:
             print('Loading Joint: ', joint_name)
@@ -3906,8 +4127,186 @@ class OBJECT_PT_Camera_Panel(bpy.types.Panel):
             if obj.type == 'CAMERA':
                 op = layout.operator("scene.set_active_camera", text=obj.name)
                 op.camera_name = obj.name  # Pass the camera name to the operator
-"""*****************************************************"""
 
+"""****************************************************************"""
+
+
+"""********************** ROS Bridge *******************************"""
+
+class SelectObjectForVelocityControl(Operator):
+    bl_idname = "wm.select_object_velocity_control"
+    bl_label = "Select Object for Velocity Control"
+    object_name: bpy.props.StringProperty()
+
+    def execute(self, context):
+        context.scene.selected_object_velocity_control = self.object_name
+        return {'FINISHED'}
+    
+class ROS_PT_AngularVelocityPanel(Panel):
+    bl_idname = "ROS_PT_AngularVelocityPanel"
+    bl_label = "Angular Velocity Panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ROS Service"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        col.label(text='Angular Velocity Control')
+
+        col.prop_search(context.scene, "selected_object_velocity_control", bpy.data, "objects", text="Select Object")
+
+        row = col.row()
+        row.prop(context.scene, "angular_velocity_x", text="X")
+        row.prop(context.scene, "angular_velocity_y", text="Y")
+        row.prop(context.scene, "angular_velocity_z", text="Z")
+
+        col.operator("wm.send_angular_velocity", text="Send Angular Velocity")
+
+class ROS_PT_LinearVelocityPanel(Panel):
+    bl_idname = "ROS_PT_LinearVelocityPanel"
+    bl_label = "Linear Velocity Panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ROS Service"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        col.label(text='Linear Velocity Control')
+        
+        col.prop_search(context.scene, "selected_object_velocity_control", bpy.data, "objects", text="Select Object")
+
+        row = col.row()
+        row.prop(context.scene, "linear_velocity_x", text="X")
+        row.prop(context.scene, "linear_velocity_y", text="Y")
+        row.prop(context.scene, "linear_velocity_z", text="Z")
+
+        col.operator("wm.send_linear_velocity", text="Send Linear Velocity")
+
+class SendAngularVelocity(Operator):
+    bl_idname = "wm.send_angular_velocity"
+    bl_label = "Send Angular Velocity"
+
+    def execute(self, context):
+        obj_name = context.scene.selected_object_velocity_control
+        x = context.scene.angular_velocity_x
+        y = context.scene.angular_velocity_y
+        z = context.scene.angular_velocity_z
+        if obj_name:
+            handler = bpy.context.blend_data.objects[obj_name]._client.get_obj_handle(obj_name) 
+            handler.set_angular_velocity(x, y, z)
+        return {'FINISHED'}
+    
+class SendLinearVelocity(Operator):
+    bl_idname = "wm.send_linear_velocity"
+    bl_label = "Send Linear Velocity"
+
+    def execute(self, context):
+        obj_name = context.scene.selected_object_velocity_control
+        x = context.scene.linear_velocity_x
+        y = context.scene.linear_velocity_y
+        z = context.scene.linear_velocity_z
+        if obj_name:
+            handler = bpy.context.blend_data.objects[obj_name]._client.get_obj_handle(obj_name) 
+            handler.set_linear_velocity(x, y, z)
+
+        return {'FINISHED'}
+
+class ServiceROS(Operator):
+    bl_idname = "wm.ros_service"
+    bl_label = "ROS Background Service"
+    _timer = None
+    _client = None
+    is_running = False
+
+    def start_ambf_client(self):
+        from ambf_client import Client
+        self._client = Client()
+        self._client.connect()
+        print('--> Connected to AMBF Client')
+
+    def modal(self, context, event):
+        if event.type == 'TIMER' and self.is_running:
+            self.update_objects(context)
+        if context.scene.stop_service:
+            return self.cancel(context)
+        return {'PASS_THROUGH'}
+
+    def execute(self, context):
+        if self.is_running:
+            self.report({'WARNING'}, "Service already running")
+            return {'CANCELLED'}
+        self.start_ambf_client()
+        self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        self.is_running = True
+        context.scene.stop_service = False
+        return {'RUNNING_MODAL'}
+    
+    def find_object_in_collections(object_name):
+        """Find an object by its name in all collections."""
+        for collection in bpy.data.collections:
+            for obj in collection.objects:
+                if obj.name == object_name:
+                    return obj
+        return None
+
+    def update_objects(self, context):
+        obj_names = self._client.get_obj_names()
+        print(f"Found {len(obj_names)} objects in AMBF")
+        
+        for ambf_name in obj_names:
+            normalized_name = normalize_name(ambf_name.split('/')[-1])
+            obj = find_object_by_normalized_name(normalized_name)
+            print(f"Looking for object matching: {normalized_name}")
+            handle = self._client.get_obj_handle(ambf_name)
+            
+            if handle and obj:
+                pose = handle.get_pose()
+                obj.location = mathutils.Vector(pose[:3])
+                obj.rotation_euler = mathutils.Euler(pose[3:], 'XYZ')
+                print(f"Updated {obj.name} to location {pose[:3]} and rotation {pose[3:]}")
+            else:
+                if not handle:
+                    print(f"Failed to get AMBF handle for {ambf_name}")
+                if not obj:
+                    print(f"No matching object found in Blender for {normalized_name}")
+
+    def cancel(self, context):
+        if self._timer:
+            context.window_manager.event_timer_remove(self._timer)
+        self.is_running = False
+        if self._client:
+            self._client.clean_up()
+        print("--> ROS Service Stopped")
+        return {'CANCELLED'}
+
+    def __del__(self):
+        self.cancel(bpy.context)
+
+class StopServiceROS(Operator):
+    bl_idname = "wm.stop_ros_service"
+    bl_label = "Stop ROS Background Service"
+
+    def execute(self, context):
+        context.scene.stop_service = True
+        return {'FINISHED'}
+
+class ROS_PT_Service_Panel(Panel):
+    bl_idname = "ROS_PT_Service_Panel"
+    bl_label = "ROS Background Service Panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ROS Service"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        col.label(text='ROS Service Control')
+        col.operator("wm.ros_service", text="Start ROS Service")
+        col.operator("wm.stop_ros_service", text="Stop ROS Service", icon='CANCEL')
+"""****************************************************************"""
 
 class AMBF_OT_cleanup_all(Operator):
     """Add Rigid Body Properties"""
@@ -3988,6 +4387,7 @@ class ToggleCollectionSelectionOperator(bpy.types.Operator):
         
         scene.selected_collections = ','.join(selected_collections)
         return {'FINISHED'}
+    
 class ActivateCollectionOperator(bpy.types.Operator):
     bl_idname = "view3d.activate_collection"
     bl_label = "Activate Collection"
@@ -4797,19 +5197,19 @@ class AMBF_PT_ambf_rigid_body(Panel):
             box = layout.box()
             
             col = box.column()
-            col.prop(context.object, 'ambf_rigid_body_passive')
+            col.prop(context.object, 'ambf_body_passive')
             
             col = box.column()
             col.prop(context.object, 'ambf_rigid_body_publish_children_names')
-            col.enabled = not context.object.ambf_rigid_body_passive
+            col.enabled = not context.object.ambf_body_passive
 
             col = box.column()
             col.prop(context.object, 'ambf_rigid_body_publish_joint_names')
-            col.enabled = not context.object.ambf_rigid_body_passive
+            col.enabled = not context.object.ambf_body_passive
 
             col = box.column()
             col.prop(context.object, 'ambf_rigid_body_publish_joint_positions')
-            col.enabled = not context.object.ambf_rigid_body_passive
+            col.enabled = not context.object.ambf_body_passive
 
 
 class AMBF_PT_ambf_ghost_object(Panel):
@@ -4824,10 +5224,9 @@ class AMBF_PT_ambf_ghost_object(Panel):
     def poll(self, context):
         active = False
         active_obj_handle = get_active_object()
-        if active_obj_handle:  # Check if an obj_handle is active
+        if active_obj_handle:  
             if active_obj_handle.type == 'MESH':
                 active = True
-
         return active
 
     def draw(self, context):
@@ -4840,7 +5239,6 @@ class AMBF_PT_ambf_ghost_object(Panel):
 
         if context.object.ambf_object_type == 'GHOST_OBJECT':
             layout.separator()
-            layout.separator()
 
             col = layout.column()
             col.enabled = False
@@ -4848,28 +5246,39 @@ class AMBF_PT_ambf_ghost_object(Panel):
 
             layout.separator()
 
-            # TODO: no parent!!
-            # col = layout.column()
-            # col.prop_search(context.object, "ambf_object_parent", context.scene, "objects")
+            col = layout.column()
+            col.prop_search(context.object, "ambf_object_parent", context.scene, "objects")
 
+            layout.separator()
+
+            # Color components
+            box = layout.box()
+            col = box.column()
+            col.label(text="Color Components:")
+            row = col.row()
+            row.prop(context.object, 'ambf_ghost_ambient_level', text="Ambient Level")
+            row.prop(context.object, 'ambf_body_transparency', text="Transparency")
+            row = col.row()
+            row.prop(context.object, 'ambf_ghost_diffuse_color', text="Diffuse Color")
+            row = col.row()
+            row.prop(context.object, 'ambf_ghost_specular_color', text="Specular Color")
+
+            # Collision properties
             box = layout.box()
             row = box.row()
-            row.prop(context.object, 'ambf_collision_type')
+            row.prop(context.object, 'ambf_collision_shape', text="Collision Shape")
+            row = box.row()
+            row.prop(context.object, 'ambf_ghost_collision_geometry', text="Collision Geometry")            
 
             if context.object.ambf_collision_type == 'MESH':
-
                 col = box.column()
-                col.prop(context.object, 'ambf_collision_mesh_type')
-
+                col.prop(context.object, 'ambf_collision_mesh_type', text="Collision Mesh Type")
             elif context.object.ambf_collision_type == 'SINGULAR_SHAPE':
-
                 col = box.column()
                 col.operator('ambf.estimate_collision_shape_geometry_per_object')
                 propgroup = context.object.ambf_collision_shape_prop_collection.items()[0][1]
                 draw_collision_shape_prop(context, propgroup, box)
-
             elif context.object.ambf_collision_type == 'COMPOUND_SHAPE':
-
                 cnt = len(context.object.ambf_collision_shape_prop_collection.items())
                 for i in range(cnt):
                     propgroup = context.object.ambf_collision_shape_prop_collection.items()[i][1]
@@ -4878,16 +5287,15 @@ class AMBF_PT_ambf_ghost_object(Panel):
                 row.operator('ambf.ambf_collision_shape_add', text='ADD SHAPE')
                 row = row.column()
                 row.operator('ambf.ambf_collision_shape_remove', text='REMOVE SHAPE')
-                if cnt == 1:
+                if cnt == 1: 
                     row.enabled = False
 
             box.separator()
             row = box.row()
             row.prop(context.object, 'ambf_collision_margin_enable', toggle=True)
-
             row = row.row()
             row.enabled = context.object.ambf_collision_margin_enable
-            row.prop(context.object, 'ambf_collision_margin')
+            row.prop(context.object, 'ambf_collision_margin', text="Collision Margin")
 
             row = box.column()
             row.alignment = 'EXPAND'
@@ -4901,9 +5309,11 @@ class AMBF_PT_ambf_ghost_object(Panel):
 
             # Publish various children properties
             box = layout.box()
-
             col = box.column()
-            col.prop(context.object, 'ambf_rigid_body_passive')
+
+            col.prop(context.object, 'ambf_scale', text="Scale")
+            col.prop(context.object, 'ambf_body_passive')
+
 
 class AMBF_PT_ambf_constraint(Panel):
     """Add Body Properties"""
@@ -5526,6 +5936,48 @@ class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
             update=collision_shape_offset_update_cb,
             subtype='EULER',
         )
+    
+class GhostObjectProperties(PropertyGroup):
+    bl_idname = "OBJECT_PT_ghost_object_properties"
+    bl_label = "Ghost Object Properties"
+    Object.ambf_ghost_scale = FloatProperty(name="Scale", default=1.0, min=0.1)
+    Object.ambf_ghost_shape = EnumProperty(
+        name="Shape",
+        items=[
+            ('BOX', "Box", "", 0),
+            ('SPHERE', "Sphere", "", 1),
+            ('CAPSULE', "Capsule", "", 2),
+            ('CYLINDER', "Cylinder", "", 3),
+            ('CONE', "Cone", "", 4),
+        ],
+        default='BOX'
+    )
+    # ambf_collision_geometry: StringProperty(name="Collision Geometry", default="*box_geometry")
+    Object.ambf_ghost_collision_geometry = FloatVectorProperty(name="Collision Geometry", size=3, default=(0.0, 0.0, 0.0))
+    
+    # Ambient color component
+    Object.ambf_ghost_ambient_level = FloatProperty(name="Ambient Level", min=0, max=1, default=1.0) # Level = 1.0
+
+    # Diffuse color component
+    Object.ambf_ghost_diffuse_color  = FloatVectorProperty(
+        name="Diffuse Color",
+        subtype="COLOR",
+        size=3,
+        min=0,
+        max=1,
+        default=(0.5, 0.5, 0.5) # r=0.5, g=0.5, b=0.5
+    )
+
+    # Specular color component
+    Object.ambf_ghost_specular_color = FloatVectorProperty(
+        name="Specular Color",
+        subtype="COLOR",
+        size=3,
+        min=0,
+        max=1,
+        default=(0.5, 0.05, 0.05)  # r=0.5, g=0.05, b=0.05
+    )
+
 
 class SoftBodyProperties(PropertyGroup):
     Object.ambf_soft_body_namespace = bpy.props.StringProperty(
@@ -5633,6 +6085,7 @@ class SoftBodyProperties(PropertyGroup):
         name="fixed nodes (Fixed Nodes)", default=""
     )
 
+# TODO: Fix type expression
 class SensorArrayItem(PropertyGroup):
     bl_idname = "OBJECT_PT_sensor_array_item"
     bl_label = "Sensor Array Item"
@@ -5650,7 +6103,7 @@ class SensorArrayItem(PropertyGroup):
         default=(0.0, -1.0, 0.0)
     )
 
-# Define SensorProperties with ambf_sensor_array using SensorArrayItem
+# TODO: Fix type expression
 class SensorProperties(PropertyGroup):
     bl_idname = "OBJECT_PT_sensor_properties"
     bl_label = "Sensor Properties"
@@ -5758,6 +6211,7 @@ custom_classes = (
         AMBF_OT_toggle_low_res_mesh_modifiers_visibility,
         AMBF_PG_CollisionShapePropGroup,
 
+        # Workspace Operators
         AMBF_OT_cleanup_all,
         AMBF_OT_ambf_rigid_body_cleanup,
         AMBF_OT_ambf_constraint_cleanup,
@@ -5766,6 +6220,8 @@ custom_classes = (
         AMBF_OT_hide_passive_joints,
         AMBF_OT_hide_all_joints,
 
+        # Modelling Helpers
+        # TODO: naming with OBJECT_OT_ prefix, OBJECT_PT_ prefix
         OBJECT_PT_Geometry_Main_Panel,
         OBJECT_PT_Camera_Panel,
         OBJECT_PT_Workspace_Main_Panel,
@@ -5817,7 +6273,6 @@ custom_classes = (
         OBJECT_PT_DebuggerPanel,
 
         AMBF_PT_main_panel,
-        CollectionSelectorPanel,
         AMBF_PT_ambf_rigid_body,
         AMBF_PT_ambf_ghost_object,
         AMBF_PT_ambf_soft_body,
@@ -5830,10 +6285,26 @@ custom_classes = (
         AMBF_OT_ambf_move_collision_mesh_to_body_origin,
         AMBF_OT_ambf_collision_mesh_use_current_location,
 
+        # Collection Operators
+        # TODO: naming with COLLECTION_OT_ prefix, COLLECTION_PT_ prefix
+        CollectionSelectorPanel,
         ToggleCollectionSelectionOperator,
         ActivateCollectionOperator,
         DeleteCollectionOperator,
         AddCollectionOperator,
+
+        # ROS
+        # TODO: naming with ROS_OT_ prefix, ROS_PT_ prefix
+        ROS_PT_Service_Panel,
+        ServiceROS,
+        StopServiceROS,
+        ROS_PT_LinearVelocityPanel,
+        SendLinearVelocity,
+        ROS_PT_AngularVelocityPanel,
+        SendAngularVelocity,
+
+        # AMBF Obj Properties
+        GhostObjectProperties,
         SoftBodyProperties,
         SensorArrayItem,
         SensorProperties
@@ -5846,20 +6317,20 @@ def register():
         register_class(cls)
     
     ''' COLLECTION PROPERTIES'''
-    bpy.types.Scene.selected_collections = bpy.props.StringProperty(
+    Scene.selected_collections = bpy.props.StringProperty(
         name="Selected Collections",
         description="Comma-separated list of selected collection names",
         default="",
         update=update_selected_collections
     )
 
-    bpy.types.Scene.new_collection_name = bpy.props.StringProperty(
+    Scene.new_collection_name = bpy.props.StringProperty(
     name="New Collection Name",
     description="Name of the new collection",
     default="New Collection"
     )
 
-    bpy.types.Scene.active_collection_name = bpy.props.StringProperty(
+    Scene.active_collection_name = bpy.props.StringProperty(
     name="Active Collection Name",
     description="Name of the active collection",
     default=""
@@ -5919,12 +6390,23 @@ def register():
     default=1.0,  
     min=0.0, 
     max=10.0  
-)
+)   
+    ''' COMMON PROPERTIES'''
+    Object.ambf_body_passive = BoolProperty(name="Is Passive?", default=False,
+                                                  description="If passive. this body will not be spawned as an AMBF communication object")
+    
+    Object.ambf_body_transparency = FloatProperty(name="Transparency", default=1.0, min=0.0, max=1.0)
+
+    Object.ambf_scale = FloatProperty(name="Scale", default=1.0, min=0.0001)
+
     ''' GHOST OBJECT PROPERTIES'''  
+    Object.ambf_ghost_object_properties = PointerProperty(type=GhostObjectProperties)
+
     ''' SOFT BODY PROPERTIES'''
     Object.ambf_soft_body_properties = PointerProperty(type=SoftBodyProperties)
     
     ''' RIGID BODY PROPERTIES'''
+    # TODO: make rigid body properties a separate class
     Object.ambf_rigid_body_namespace = StringProperty(name="Namespace", default="")
 
     Object.ambf_rigid_body_mass = FloatProperty(name="mass", default=1.0, min=0.0001)
@@ -5958,9 +6440,6 @@ def register():
     Object.ambf_rigid_body_angular_controller_i_gain = FloatProperty(name="Integral Gain (I)", default=0, min=0)
 
     Object.ambf_rigid_body_angular_controller_d_gain = FloatProperty(name="Damping Gain (D)", default=1, min=0)
-
-    Object.ambf_rigid_body_passive = BoolProperty(name="Is Passive?", default=False,
-                                                  description="If passive. this body will not be spawned as an AMBF communication object")
 
     Object.ambf_rigid_body_is_static = BoolProperty \
             (
@@ -6263,7 +6742,7 @@ def register():
     #TODO: Add Actuator Properties
 
     ''' SENSOR PROPERTIES'''
-    bpy.types.Object.ambf_sensor_properties = bpy.props.PointerProperty(type=SensorProperties)
+    Object.ambf_sensor_properties = bpy.props.PointerProperty(type=SensorProperties)
     
     ''' SCENARIO PROPERTIES'''
     Scene.ambf_adf_path = StringProperty \
@@ -6386,17 +6865,153 @@ def register():
             default=False,
             description="Only save the meshes + textures for the selected object"
         )
+    
+    """ ROS PROPERTIES """
+    Scene.stop_service = bpy.props.BoolProperty(default=False)
+    Scene.selected_object_velocity_control = bpy.props.StringProperty()
+
+    Scene.angular_velocity_x = bpy.props.FloatProperty(default=0.0)
+    Scene.angular_velocity_y = bpy.props.FloatProperty(default=0.0)
+    Scene.angular_velocity_z = bpy.props.FloatProperty(default=0.0)
+
+    Scene.linear_velocity_x = bpy.props.FloatProperty(default=0.0)
+    Scene.linear_velocity_y = bpy.props.FloatProperty(default=0.0)
+    Scene.linear_velocity_z = bpy.props.FloatProperty(default=0.0)
 
     Object.ambf_collision_shape_prop_collection = CollectionProperty(type=AMBF_PG_CollisionShapePropGroup)
 
-
 def unregister():
-    from bpy.utils import unregister_class    
+    from bpy.utils import unregister_class
     for cls in reversed(custom_classes):
         unregister_class(cls)
+
+    ''' COLLECTION PROPERTIES '''
     del bpy.types.Scene.selected_collections
     del bpy.types.Scene.new_collection_name
     del bpy.types.Scene.active_collection_name
+
+    ''' LIGHT PROPERTIES '''
+    del bpy.types.Object.ambf_light_namespace
+    del bpy.types.Object.ambf_light_spot_exponent
+    del bpy.types.Object.ambf_light_shadow_quality
+    del bpy.types.Object.ambf_light_cutoff_angle
+    del bpy.types.Object.ambf_light_constant_attenuation
+
+    ''' COMMON PROPERTIES '''
+    del bpy.types.Object.ambf_body_passive
+    del bpy.types.Object.ambf_body_transparency
+
+    ''' GHOST OBJECT PROPERTIES '''
+    del bpy.types.Object.ambf_ghost_object_properties
+
+    ''' SOFT BODY PROPERTIES '''
+    del bpy.types.Object.ambf_soft_body_properties
+
+    ''' RIGID BODY PROPERTIES '''
+    del bpy.types.Object.ambf_rigid_body_namespace
+    del bpy.types.Object.ambf_rigid_body_mass
+    del bpy.types.Object.ambf_rigid_body_inertia_x
+    del bpy.types.Object.ambf_rigid_body_inertia_y
+    del bpy.types.Object.ambf_rigid_body_inertia_z
+    del bpy.types.Object.ambf_rigid_body_static_friction
+    del bpy.types.Object.ambf_rigid_body_rolling_friction
+    del bpy.types.Object.ambf_rigid_body_restitution
+    del bpy.types.Object.ambf_rigid_body_linear_damping
+    del bpy.types.Object.ambf_rigid_body_angular_damping
+    del bpy.types.Object.ambf_rigid_body_enable_controllers
+    del bpy.types.Object.ambf_rigid_body_linear_controller_p_gain
+    del bpy.types.Object.ambf_rigid_body_linear_controller_i_gain
+    del bpy.types.Object.ambf_rigid_body_linear_controller_d_gain
+    del bpy.types.Object.ambf_rigid_body_angular_controller_p_gain
+    del bpy.types.Object.ambf_rigid_body_angular_controller_i_gain
+    del bpy.types.Object.ambf_rigid_body_angular_controller_d_gain
+    del bpy.types.Object.ambf_rigid_body_is_static
+    del bpy.types.Object.ambf_rigid_body_specify_inertia
+    del bpy.types.Object.ambf_rigid_body_linear_inertial_offset
+    del bpy.types.Object.ambf_rigid_body_angular_inertial_offset
+    del bpy.types.Object.ambf_rigid_body_controller_output_type
+    del bpy.types.Object.ambf_rigid_body_publish_children_names
+    del bpy.types.Object.ambf_rigid_body_publish_joint_names
+    del bpy.types.Object.ambf_rigid_body_publish_joint_positions
+
+    ''' OBJECT PROPERTIES '''
+    del bpy.types.Object.ambf_object_override_gravity
+    del bpy.types.Object.ambf_object_gravity
+    del bpy.types.Object.ambf_object_visible
+    del bpy.types.Object.ambf_object_visible_size
+    del bpy.types.Object.ambf_collision_margin_enable
+    del bpy.types.Object.ambf_collision_show_shapes_per_object
+    del bpy.types.Object.ambf_collision_margin
+    del bpy.types.Object.ambf_collision_type
+    del bpy.types.Object.ambf_use_separate_collision_mesh
+    del bpy.types.Object.ambf_collision_mesh
+    del bpy.types.Object.ambf_collision_mesh_type
+    del bpy.types.Object.ambf_collision_groups
+
+    ''' CONSTRAINT PROPERTIES '''
+    del bpy.types.Object.ambf_constraint_type
+    del bpy.types.Object.ambf_object_parent
+    del bpy.types.Object.ambf_object_child
+    del bpy.types.Object.ambf_constraint_name
+    del bpy.types.Object.ambf_constraint_enable_controller_gains
+    del bpy.types.Object.ambf_constraint_controller_p_gain
+    del bpy.types.Object.ambf_constraint_controller_i_gain
+    del bpy.types.Object.ambf_constraint_controller_d_gain
+    del bpy.types.Object.ambf_constraint_damping
+    del bpy.types.Object.ambf_constraint_stiffness
+    del bpy.types.Object.ambf_constraint_equilibrium_point
+    del bpy.types.Object.ambf_constraint_limits_enable
+    del bpy.types.Object.ambf_constraint_passive
+    del bpy.types.Object.ambf_constraint_enable_feedback
+    del bpy.types.Object.ambf_constraint_limits_lower
+    del bpy.types.Object.ambf_constraint_limits_higher
+    del bpy.types.Object.ambf_constraint_max_motor_impulse
+    del bpy.types.Object.ambf_constraint_axis
+    del bpy.types.Object.ambf_constraint_cone_twist_limits
+    del bpy.types.Object.ambf_constraint_six_dof_limits_low_angular
+    del bpy.types.Object.ambf_constraint_six_dof_limits_high_angular
+    del bpy.types.Object.ambf_constraint_six_dof_limits_low_linear
+    del bpy.types.Object.ambf_constraint_six_dof_limits_high_linear
+    del bpy.types.Object.ambf_constraint_six_dof_stiffness_angular
+    del bpy.types.Object.ambf_constraint_six_dof_stiffness_linear
+    del bpy.types.Object.ambf_constraint_six_dof_damping_angular
+    del bpy.types.Object.ambf_constraint_six_dof_damping_linear
+    del bpy.types.Object.ambf_constraint_six_dof_equilibrium_angular
+    del bpy.types.Object.ambf_constraint_six_dof_equilibrium_linear
+    del bpy.types.Object.ambf_constraint_controller_output_type
+
+    ''' SENSOR PROPERTIES '''
+    del bpy.types.Object.ambf_sensor_properties
+
+    ''' SCENARIO PROPERTIES '''
+    del bpy.types.Scene.ambf_adf_path
+    del bpy.types.Scene.ambf_meshes_path
+    del bpy.types.Scene.ambf_meshes_save_type
+    del bpy.types.Scene.ambf_mesh_max_vertices
+    del bpy.types.Scene.ambf_model_override_gravity
+    del bpy.types.Scene.ambf_model_gravity
+    del bpy.types.Scene.ambf_ignore_inter_collision
+    del bpy.types.Scene.ambf_precision
+    del bpy.types.Scene.ambf_load_adf_filepath
+    del bpy.types.Scene.ambf_namespace
+    del bpy.types.Scene.ambf_show_collision_shapes
+    del bpy.types.Scene.ambf_enable_forced_cleanup
+    del bpy.types.Scene.ambf_save_high_res
+    del bpy.types.Scene.ambf_save_low_res
+    del bpy.types.Scene.ambf_save_textures
+    del bpy.types.Scene.ambf_save_selection_only
+
+    ''' ROS PROPERTIES '''
+    del bpy.types.Scene.stop_service
+    del bpy.types.Scene.selected_object_velocity_control
+    del bpy.types.Scene.linear_velocity_x
+    del bpy.types.Scene.linear_velocity_y
+    del bpy.types.Scene.linear_velocity_z
+    del bpy.types.Scene.angular_velocity_x
+    del bpy.types.Scene.angular_velocity_y
+    del bpy.types.Scene.angular_velocity_z
+    del bpy.types.Object.ambf_collision_shape_prop_collection
+
     bpy.app.handlers.depsgraph_update_post.remove(ensure_active_collection)
 
 if __name__ == "__main__":
