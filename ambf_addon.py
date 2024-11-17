@@ -1541,6 +1541,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         ('diterations', 'ambf_soft_body_enable_deformation_iterations', 'ambf_soft_body_deformation_iterations'),
         ('citerations', 'ambf_soft_body_enable_collision_iterations', 'ambf_soft_body_collision_iterations'),
         ('flags', 'ambf_soft_body_enable_flags', 'ambf_soft_body_flags'),
+        ('bending constraints', 'ambf_soft_body_enable_bending_constraint', 'ambf_soft_body_bending_constraint'),
         ('cutting', 'ambf_soft_body_enable_cutting_enabled', 'ambf_soft_body_cutting_enabled'),
         ('clusters', 'ambf_soft_body_enable_clusters', 'ambf_soft_body_clusters'),
     ]
@@ -4760,12 +4761,15 @@ class OBJECT_OT_AddFixedNodesFromSelection(Operator):
             self.report({'WARNING'}, "No vertices selected.")
             return {'CANCELLED'}
         
-        # Add selected vertex indices to the collection property
-        for index in selected_verts:
+        # Add selected vertex indices to the collection property, avoiding duplicates
+        existing_indices = {item.node_index for item in obj.ambf_soft_body_properties.ambf_soft_body_fixed_nodes}
+        new_indices = [index for index in selected_verts if index not in existing_indices]
+        
+        for index in new_indices:
             item = obj.ambf_soft_body_properties.ambf_soft_body_fixed_nodes.add()
             item.node_index = index
         
-        self.report({'INFO'}, f"Added {len(selected_verts)} fixed nodes.")
+        self.report({'INFO'}, f"Added {len(new_indices)} fixed nodes.")
         return {'FINISHED'}
 
 class OBJECT_OT_RemoveFixedNode(bpy.types.Operator):
@@ -5716,8 +5720,9 @@ class AMBF_PT_ambf_soft_body(bpy.types.Panel):
                     ('ambf_soft_body_enable_deformation_iterations', 'ambf_soft_body_deformation_iterations', "Deformation Iterations"),
                     ('ambf_soft_body_enable_collision_iterations', 'ambf_soft_body_collision_iterations', "Collision Iterations")
                 ]),
-                ("Flags and Cutting Properties", [
+                ("Flags, Bending, and Cutting Properties", [
                     ('ambf_soft_body_enable_flags', 'ambf_soft_body_flags', "Flags"),
+                    ('ambf_soft_body_enable_bending_constraint', 'ambf_soft_body_bending_constraint', "Bending Constraint"),
                     ('ambf_soft_body_enable_cutting_enabled', 'ambf_soft_body_cutting_enabled', "Cutting Enabled")
                 ])
             ]
