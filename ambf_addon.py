@@ -3567,6 +3567,113 @@ class AMBF_OT_load_ambf_file(Operator):
                 shape_prop_group = prop_tuple[1]
                 collision_shape_create_visual(obj_handle, shape_prop_group)
 
+    def load_ambf_soft_body(self, body_data, obj_handle):
+        print(f"Loading Soft Body: {body_data.get('name')}")
+
+        # Set basic object properties
+        obj_handle.ambf_object_type = 'SOFT_BODY'
+        if 'name' in body_data:
+            obj_handle.name = body_data['name']
+        
+        if 'mass' in body_data:
+            obj_handle.ambf_body_mass = body_data['mass']
+        
+        if 'scale' in body_data:
+            obj_handle.ambf_scale = body_data['scale']
+
+        if 'location' in body_data:
+            location = body_data['location']
+            if 'position' in location:
+                position = location['position']
+                obj_handle.location.x = position.get('x', 0.0)
+                obj_handle.location.y = position.get('y', 0.0)
+                obj_handle.location.z = position.get('z', 0.0)
+            if 'orientation' in location:
+                orientation = location['orientation']
+                obj_handle.rotation_euler.x = orientation.get('r', 0.0)
+                obj_handle.rotation_euler.y = orientation.get('p', 0.0)
+                obj_handle.rotation_euler.z = orientation.get('y', 0.0)
+
+        # Set inertial offsets
+        if 'inertial offset' in body_data:
+            inertial_offset = body_data['inertial offset']
+            if 'position' in inertial_offset:
+                position_offset = inertial_offset['position']
+                obj_handle.ambf_body_linear_inertial_offset[0] = position_offset.get('x', 0.0)
+                obj_handle.ambf_body_linear_inertial_offset[1] = position_offset.get('y', 0.0)
+                obj_handle.ambf_body_linear_inertial_offset[2] = position_offset.get('z', 0.0)
+            if 'orientation' in inertial_offset:
+                orientation_offset = inertial_offset['orientation']
+                obj_handle.ambf_body_angular_inertial_offset[0] = orientation_offset.get('r', 0.0)
+                obj_handle.ambf_body_angular_inertial_offset[1] = orientation_offset.get('p', 0.0)
+                obj_handle.ambf_body_angular_inertial_offset[2] = orientation_offset.get('y', 0.0)
+
+        if 'color components' in body_data:
+            color_components = body_data['color components']
+            if 'ambient' in color_components:
+                ambient = color_components['ambient']
+                obj_handle.ambf_object_ambient_level = ambient.get('level', 1.0)
+            if 'diffuse' in color_components:
+                diffuse = color_components['diffuse']
+                obj_handle.ambf_object_diffuse_color[0] = diffuse.get('r', 0.5)
+                obj_handle.ambf_object_diffuse_color[1] = diffuse.get('g', 0.5)
+                obj_handle.ambf_object_diffuse_color[2] = diffuse.get('b', 0.5)
+            if 'specular' in color_components:
+                specular = color_components['specular']
+                obj_handle.ambf_object_specular_color[0] = specular.get('r', 0.5)
+                obj_handle.ambf_object_specular_color[1] = specular.get('g', 0.5)
+                obj_handle.ambf_object_specular_color[2] = specular.get('b', 0.5)
+
+        # Set soft body configuration
+        config = body_data.get('config', {})
+        for config_key, enable_attr, value_attr in [
+            ('kLST', 'ambf_soft_body_enable_linear_stiffness', 'ambf_soft_body_linear_stiffness'),
+            ('kAST', 'ambf_soft_body_enable_angular_stiffness', 'ambf_soft_body_angular_stiffness'),
+            ('kVST', 'ambf_soft_body_enable_volume_stiffness', 'ambf_soft_body_volume_stiffness'),
+            ('kVCF', 'ambf_soft_body_enable_damping', 'ambf_soft_body_velocity_damping'),
+            ('kDP', 'ambf_soft_body_enable_drag', 'ambf_soft_body_drag_coefficient'),
+            ('kDG', 'ambf_soft_body_enable_friction', 'ambf_soft_body_dynamic_friction'),
+            ('kLF', 'ambf_soft_body_enable_aerodynamics', 'ambf_soft_body_lift_coefficient'),
+            ('kPR', 'ambf_soft_body_enable_pressure', 'ambf_soft_body_pressure_coefficient'),
+            ('kVC', 'ambf_soft_body_enable_volume_conservation', 'ambf_soft_body_volume_conservation'),
+            ('kDF', 'ambf_soft_body_enable_deformation_friction', 'ambf_soft_body_deformation_friction'),
+            ('kMT', 'ambf_soft_body_enable_pose_matching', 'ambf_soft_body_pose_matching'),
+            ('kCHR', 'ambf_soft_body_enable_collision_hardness', 'ambf_soft_body_collision_hardness'),
+            ('kKHR', 'ambf_soft_body_enable_kinetic_hardness', 'ambf_soft_body_kinetic_hardness'),
+            ('kSHR', 'ambf_soft_body_enable_shear_hardness', 'ambf_soft_body_shear_hardness'),
+            ('kAHR', 'ambf_soft_body_enable_anchor_hardness', 'ambf_soft_body_anchor_hardness'),
+            ('kSRHR_CL', 'ambf_soft_body_enable_srhr_cl_stiffness', 'ambf_soft_body_srhr_cl_stiffness'),
+            ('kSKHR_CL', 'ambf_soft_body_enable_skhr_cl_stiffness', 'ambf_soft_body_skhr_cl_stiffness'),
+            ('kSSHR_CL', 'ambf_soft_body_enable_sshr_cl_stiffness', 'ambf_soft_body_sshr_cl_stiffness'),
+            ('kSR_SPLT_CL', 'ambf_soft_body_enable_sr_splt_cl_stiffness', 'ambf_soft_body_sr_splt_cl_stiffness'),
+            ('kSK_SPLT_CL', 'ambf_soft_body_enable_sk_splt_cl_stiffness', 'ambf_soft_body_sk_splt_cl_stiffness'),
+            ('kSS_SPLT_CL', 'ambf_soft_body_enable_ss_splt_cl_stiffness', 'ambf_soft_body_ss_splt_cl_stiffness'),
+            ('maxvolume', 'ambf_soft_body_enable_max_volume', 'ambf_soft_body_max_volume'),
+            ('timescale', 'ambf_soft_body_enable_timescale', 'ambf_soft_body_timescale'),
+            ('viterations', 'ambf_soft_body_enable_velocity_iterations', 'ambf_soft_body_velocity_iterations'),
+            ('piterations', 'ambf_soft_body_enable_position_iterations', 'ambf_soft_body_position_iterations'),
+            ('diterations', 'ambf_soft_body_enable_deformation_iterations', 'ambf_soft_body_deformation_iterations'),
+            ('citerations', 'ambf_soft_body_enable_collision_iterations', 'ambf_soft_body_collision_iterations'),
+            ('flags', 'ambf_soft_body_enable_flags', 'ambf_soft_body_flags'),
+            ('bending constraints', 'ambf_soft_body_enable_bending_constraint', 'ambf_soft_body_bending_constraint'),
+            ('cutting', 'ambf_soft_body_enable_cutting_enabled', 'ambf_soft_body_cutting_enabled'),
+            ('clusters', 'ambf_soft_body_enable_clusters', 'ambf_soft_body_clusters'),
+        ]:
+            if config_key in config:
+                setattr(obj_handle.ambf_soft_body_properties, enable_attr, True)
+                setattr(obj_handle.ambf_soft_body_properties, value_attr, config[config_key])
+
+        # Handle fixed nodes
+        if 'fixed nodes' in config:
+            obj_handle.ambf_soft_body_properties.ambf_soft_body_enable_fixed_nodes = True
+            obj_handle.ambf_soft_body_properties.ambf_soft_body_fixed_nodes.clear()
+            for node_index in config['fixed nodes']:
+                node_item = obj_handle.ambf_soft_body_properties.ambf_soft_body_fixed_nodes.add()
+                node_item.node_index = node_index
+
+        # Randomize constraints
+        obj_handle.ambf_soft_body_randomize_constraints = config.get('randomize constraints', False)
+
     def load_object_name(self, adf_data, obj_handle):
 
         af_name = adf_data['name']
@@ -3603,6 +3710,16 @@ class AMBF_OT_load_ambf_file(Operator):
         obj_handle = self.load_ambf_mesh(body_data, body_id)
         self.load_object_name(body_data, obj_handle)
         self.load_ambf_rigid_body(body_data, obj_handle)
+        self.load_body_location(body_data, obj_handle)
+        self.load_material(body_data, obj_handle)
+        self._blender_remapped_body_names[body_id] = obj_handle.name
+        CommonConfig.loaded_body_map[obj_handle] = body_data
+
+    def load_soft_body(self, body_id):
+        body_data = self._adf_data[body_id]
+        obj_handle = self.load_ambf_mesh(body_data, body_id)
+        self.load_object_name(body_data, obj_handle)
+        self.load_ambf_soft_body(body_data, obj_handle)
         self.load_body_location(body_data, obj_handle)
         self.load_material(body_data, obj_handle)
         self._blender_remapped_body_names[body_id] = obj_handle.name
@@ -4003,7 +4120,12 @@ class AMBF_OT_load_ambf_file(Operator):
             bodies_list = self._adf_data['bodies']
         except:
             bodies_list = []
-        
+
+        try:
+            soft_bodies_list = self._adf_data['soft bodies']
+        except:
+            soft_bodies_list = []
+
         try :
             ghost_list = self._adf_data['ghost objects']
         except:
@@ -4056,6 +4178,10 @@ class AMBF_OT_load_ambf_file(Operator):
         for body_id in bodies_list:
             print('Loading Body: ', body_id)
             self.load_body(body_id)
+        
+        for body_id in soft_bodies_list:
+            print('Loading Soft Body: ', body_id)
+            self.load_soft_body(body_id)
         
         for ghost_name in ghost_list:
             print('Loading Ghost: ', ghost_name)
