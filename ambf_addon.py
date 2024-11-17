@@ -20,6 +20,7 @@ bl_info = {
     }
 
 import bpy
+import bmesh
 import math
 import yaml
 import os
@@ -205,17 +206,30 @@ class ActuatorTemplate:
 
 class SoftBodyTemplate:
     def __init__(self):
-        self.adf_data = OrderedDict()
-        self.adf_data['name'] = ''
-        self.adf_data['namespace'] = ''
-        self.adf_data['type'] = 'Cloth'
-        self.adf_data['parent'] = ''
-        self.adf_data['location'] = get_pose_ordered_dict
-        self.adf_data['location']['position'] = get_xyz_ordered_dict()
-        self.adf_data['location']['orientation'] = get_rpy_ordered_dict()
-        self.adf_data['visible'] = False
-        self.adf_data['visible size'] = 0.0
+        self._adf_data = OrderedDict()
+        self._adf_data['name'] = ''
+        self._adf_data['namespace'] = ''
 
+        self._adf_data['location'] = OrderedDict()
+        self._adf_data['location']['position'] = get_xyz_ordered_dict()
+        self._adf_data['location']['orientation'] = get_rpy_ordered_dict()
+
+        self._adf_data['inertial offset'] = OrderedDict()
+        self._adf_data['inertial offset']['position'] = get_xyz_ordered_dict()
+        self._adf_data['inertial offset']['orientation'] = get_rpy_ordered_dict()
+
+        self._adf_data['color components'] = {
+            'ambient': {'level': 1.0},
+            'diffuse': {'r': 0.5, 'g': 0.5, 'b': 0.5},
+            'specular': {'r': 0.5, 'g': 0.5, 'b': 0.5}
+        }
+
+        self._adf_data['mesh'] = ''
+        self._adf_data['scale'] = 1.0
+        self._adf_data['mass'] = 1.0
+
+        self._adf_data['config'] = OrderedDict()
+        self._adf_data['randomize constraints'] = False
 
 # Global Variables
 class CommonConfig:
@@ -689,8 +703,8 @@ def estimate_joint_controller_gain(obj_handle):
             P_pcom_j = T_p_j @ P_pcom
             P_ccom = mathutils.Vector(compute_local_com(child_obj_handle))
             P_ccom_j = T_c_j @ P_ccom
-            mass_p = parent_obj_handle.ambf_rigid_body_mass
-            mass_c = child_obj_handle.ambf_rigid_body_mass
+            mass_p = parent_obj_handle.ambf_body_mass
+            mass_c = child_obj_handle.ambf_body_mass
             if obj_handle.ambf_constraint_type == 'REVOLUTE':
                 if P_pcom_j.length > 0.001:
                     theta_pj = N_j.angle(P_pcom_j)
@@ -732,7 +746,7 @@ def estimate_joint_controller_gain(obj_handle):
 
 def inertia_of_mesh(obj_handle, mass=None):
     if mass == None:
-        mass = obj_handle.ambf_rigid_body_mass
+        mass = obj_handle.ambf_body_mass
     num_vertices = len(obj_handle.data.vertices)
     dm = mass / num_vertices
     I = mathutils.Vector((0, 0, 0))
@@ -801,7 +815,7 @@ def inertia_of_capsule(mass, r, h_total, axis):
 
 def calculate_principal_inertia(obj_handle):
     # Calculate Ixx, Iyy and Izz
-    mass = obj_handle.ambf_rigid_body_mass
+    mass = obj_handle.ambf_body_mass
     # For now, handle the calculation of the compound shape inertia as the convex hull's inertia
     if obj_handle.ambf_collision_type in ['MESH', 'COMPOUND_SHAPE']:
         I = inertia_of_mesh(obj_handle)
@@ -832,7 +846,7 @@ def calculate_principal_inertia(obj_handle):
         return
 
     # Parallel Axis Theorem
-    off = obj_handle.ambf_rigid_body_linear_inertial_offset
+    off = obj_handle.ambf_body_linear_inertial_offset
     I[0] = I[0] + mass * (off[1] ** 2 + off[2] ** 2)
     I[1] = I[1] + mass * (off[0] ** 2 + off[2] ** 2)
     I[2] = I[2] + mass * (off[0] ** 2 + off[1] ** 2)
@@ -877,6 +891,7 @@ def load_blender_mesh(context, mesh_filepath, name):
         bpy.ops.import_mesh.stl(filepath=str(mesh_filepath.resolve()))
 
     elif mesh_filepath.suffix in ['.obj', '.OBJ']:
+        print('Importing OBJ: ', mesh_filepath)
         _manually_select_obj_handle = True
         bpy.ops.import_scene.obj(filepath=str(mesh_filepath.resolve()), axis_up='Z', axis_forward='Y')
         # Hack, .3ds and .obj imports do not make the imported obj_handle active. A hack is
@@ -933,7 +948,7 @@ def load_blender_mesh(context, mesh_filepath, name):
 
     return result
 
-
+# TODO: save to mesh not working for all except .stl
 def save_blender_mesh(obj_handle, mesh_filepath, mesh_type, use_mesh_modifiers):
     print('\nHandle Save Blender Mesh: ', obj_handle.name, 'TO: ', mesh_filepath)
     hide_state = is_object_hidden(obj_handle)
@@ -1395,17 +1410,17 @@ class AMBF_OT_generate_ambf_file(Operator):
         # Populate color components
         ghost_data['color components'] = {
             'ambient': {
-                'level': body_obj_handle.ambf_ghost_ambient_level,
+                'level': body_obj_handle.ambf_object_ambient_level,
             },
             'diffuse': {
-                'r': body_obj_handle.ambf_ghost_diffuse_color[0],
-                'g': body_obj_handle.ambf_ghost_diffuse_color[1],
-                'b': body_obj_handle.ambf_ghost_diffuse_color[2]
+                'r': body_obj_handle.ambf_object_diffuse_color[0],
+                'g': body_obj_handle.ambf_object_diffuse_color[1],
+                'b': body_obj_handle.ambf_object_diffuse_color[2]
             },
             'specular': {
-                'r': body_obj_handle.ambf_ghost_specular_color[0],
-                'g': body_obj_handle.ambf_ghost_specular_color[1],
-                'b': body_obj_handle.ambf_ghost_specular_color[2]
+                'r': body_obj_handle.ambf_object_specular_color[0],
+                'g': body_obj_handle.ambf_object_specular_color[1],
+                'b': body_obj_handle.ambf_object_specular_color[2]
             },
             'transparency': body_obj_handle.ambf_body_transparency
         }
@@ -1413,14 +1428,135 @@ class AMBF_OT_generate_ambf_file(Operator):
         adf_data[ghost_yaml_name] = ghost_data
         self._ghost_object_names_list.append(ghost_yaml_name)
     
-    # def generate_body_data_from_ambf_soft_body(self, adf_data, body_obj_handle):
-    #     if body_obj_handle.ambf_object_type != 'SOFT_BODY':
-    #         return
+    def generate_body_data_from_ambf_soft_body(self, adf_data, body_obj_handle):
+        if body_obj_handle.ambf_object_type != 'SOFT_BODY':
+            return
+
+        # The object is unlinked from the scene. Don't write it
+        if self._context.scene.objects.get(body_obj_handle.name) is None:
+            return
+
+        if is_object_hidden(body_obj_handle):
+            return
+
+        print('Generating Soft Body: ', body_obj_handle.name)
+
+        soft = SoftBodyTemplate()
+        soft_data = soft._adf_data
+
+        # if not compare_namespace_with_global(body_obj_handle.name):
+        #     if get_namespace(body_obj_handle.name) != '':
+        #         soft_data['namespace'] = get_namespace(body_obj_handle.name)
+
+        body_obj_handle_name = remove_namespace_prefix(body_obj_handle.name)
+        soft_yaml_name = self.add_body_prefix_str(body_obj_handle_name)
+        output_mesh = bpy.context.scene.ambf_meshes_save_type
+
+        soft_data['name'] = body_obj_handle_name
+        soft_data['mesh'] = body_obj_handle_name + '.' + output_mesh
+        soft_data['mass'] = body_obj_handle.ambf_body_mass
+
+        if body_obj_handle.ambf_collision_margin_enable:
+            soft_data['collision margin'] = ambf_round(body_obj_handle.ambf_collision_margin)
+
+        soft_data['scale'] = body_obj_handle.ambf_scale
+
+        soft_pose = body_obj_handle.matrix_world
+        soft_data['location'] = {
+            'position': {
+                'x': ambf_round(soft_pose.translation.x),
+                'y': ambf_round(soft_pose.translation.y),
+                'z': ambf_round(soft_pose.translation.z),
+            },
+            'orientation': {
+                'r': ambf_round(soft_pose.to_euler().x),
+                'p': ambf_round(soft_pose.to_euler().y),
+                'y': ambf_round(soft_pose.to_euler().z),
+            },
+        }
+
+        soft_data['inertial offset'] = {
+            'position': {
+                'x': ambf_round(body_obj_handle.ambf_body_linear_inertial_offset[0]),
+                'y': ambf_round(body_obj_handle.ambf_body_linear_inertial_offset[1]),
+                'z': ambf_round(body_obj_handle.ambf_body_linear_inertial_offset[2]),
+            },
+            'orientation': {
+                'r': ambf_round(body_obj_handle.ambf_body_angular_inertial_offset[0]),
+                'p': ambf_round(body_obj_handle.ambf_body_angular_inertial_offset[1]),
+                'y': ambf_round(body_obj_handle.ambf_body_angular_inertial_offset[2]),
+            },
+        }
+
+        soft_data['color components'] = {
+            'ambient': {'level': body_obj_handle.ambf_object_ambient_level},
+            'diffuse': {
+                'r': body_obj_handle.ambf_object_diffuse_color[0],
+                'g': body_obj_handle.ambf_object_diffuse_color[1],
+                'b': body_obj_handle.ambf_object_diffuse_color[2],
+            },
+            'specular': {
+                'r': body_obj_handle.ambf_object_specular_color[0],
+                'g': body_obj_handle.ambf_object_specular_color[1],
+                'b': body_obj_handle.ambf_object_specular_color[2],
+            },
+            'transparency': body_obj_handle.ambf_body_transparency,
+        }
+
+        # Check and add enabled configuration properties
+        def add_if_enabled(config_key, enable_attr, value_attr):
+            # print('Checking: ', config_key, enable_attr, value_attr)
+            if getattr(body_obj_handle.ambf_soft_body_properties, enable_attr):
+                # print('Adding: ', config_key, value_attr)
+                value = getattr(body_obj_handle.ambf_soft_body_properties, value_attr)
+                # print('Adding: ', config_key, value)
+                soft_data['config'][config_key] = value
+
+        properties = [
+        ('kLST', 'ambf_soft_body_enable_linear_stiffness', 'ambf_soft_body_linear_stiffness'),
+        ('kAST', 'ambf_soft_body_enable_angular_stiffness', 'ambf_soft_body_angular_stiffness'),
+        ('kVST', 'ambf_soft_body_enable_volume_stiffness', 'ambf_soft_body_volume_stiffness'),
+        ('kVCF', 'ambf_soft_body_enable_damping', 'ambf_soft_body_velocity_damping'),
+        ('kDP', 'ambf_soft_body_enable_drag', 'ambf_soft_body_drag_coefficient'),
+        ('kDG', 'ambf_soft_body_enable_friction', 'ambf_soft_body_dynamic_friction'),
+        ('kLF', 'ambf_soft_body_enable_aerodynamics', 'ambf_soft_body_lift_coefficient'),
+        ('kPR', 'ambf_soft_body_enable_pressure', 'ambf_soft_body_pressure_coefficient'),
+        ('kVC', 'ambf_soft_body_enable_volume_conservation', 'ambf_soft_body_volume_conservation'),
+        ('kDF', 'ambf_soft_body_enable_deformation_friction', 'ambf_soft_body_deformation_friction'),
+        ('kMT', 'ambf_soft_body_enable_pose_matching', 'ambf_soft_body_pose_matching'),
+        ('kCHR', 'ambf_soft_body_enable_collision_hardness', 'ambf_soft_body_collision_hardness'),
+        ('kKHR', 'ambf_soft_body_enable_kinetic_hardness', 'ambf_soft_body_kinetic_hardness'),
+        ('kSHR', 'ambf_soft_body_enable_shear_hardness', 'ambf_soft_body_shear_hardness'),
+        ('kAHR', 'ambf_soft_body_enable_anchor_hardness', 'ambf_soft_body_anchor_hardness'),
+        ('kSRHR_CL', 'ambf_soft_body_enable_srhr_cl_stiffness', 'ambf_soft_body_srhr_cl_stiffness'),
+        ('kSKHR_CL', 'ambf_soft_body_enable_skhr_cl_stiffness', 'ambf_soft_body_skhr_cl_stiffness'),
+        ('kSSHR_CL', 'ambf_soft_body_enable_sshr_cl_stiffness', 'ambf_soft_body_sshr_cl_stiffness'),
+        ('kSR_SPLT_CL', 'ambf_soft_body_enable_sr_splt_cl_stiffness', 'ambf_soft_body_sr_splt_cl_stiffness'),
+        ('kSK_SPLT_CL', 'ambf_soft_body_enable_sk_splt_cl_stiffness', 'ambf_soft_body_sk_splt_cl_stiffness'),
+        ('kSS_SPLT_CL', 'ambf_soft_body_enable_ss_splt_cl_stiffness', 'ambf_soft_body_ss_splt_cl_stiffness'),
+        ('maxvolume', 'ambf_soft_body_enable_max_volume', 'ambf_soft_body_max_volume'),
+        ('timescale', 'ambf_soft_body_enable_timescale', 'ambf_soft_body_timescale'),
+        ('viterations', 'ambf_soft_body_enable_velocity_iterations', 'ambf_soft_body_velocity_iterations'),
+        ('piterations', 'ambf_soft_body_enable_position_iterations', 'ambf_soft_body_position_iterations'),
+        ('diterations', 'ambf_soft_body_enable_deformation_iterations', 'ambf_soft_body_deformation_iterations'),
+        ('citerations', 'ambf_soft_body_enable_collision_iterations', 'ambf_soft_body_collision_iterations'),
+        ('flags', 'ambf_soft_body_enable_flags', 'ambf_soft_body_flags'),
+        ('cutting', 'ambf_soft_body_enable_cutting_enabled', 'ambf_soft_body_cutting_enabled'),
+        ('clusters', 'ambf_soft_body_enable_clusters', 'ambf_soft_body_clusters'),
+    ]
+
+        for config_key, enable_attr, value_attr in properties:
+            add_if_enabled(config_key, enable_attr, value_attr)
+
+        if body_obj_handle.ambf_soft_body_properties.ambf_soft_body_enable_fixed_nodes:
+            soft_data['config']['fixed nodes'] = [
+                node.node_index for node in body_obj_handle.ambf_soft_body_properties.ambf_soft_body_fixed_nodes
+            ]
         
-    #     # The object is unlinked from the scene. Don't write it
-    #     if self._context.scene.objects.get(body_obj_handle.name) is None:
-    #         return
+        soft_data['randomize constraints'] = body_obj_handle.ambf_soft_body_randomize_constraints
         
+        adf_data[soft_yaml_name] = soft_data
+        self._soft_body_names_list.append(soft_yaml_name)
 
     def generate_body_data_from_ambf_rigid_body(self, adf_data, body_obj_handle):
 
@@ -1477,7 +1613,7 @@ class AMBF_OT_generate_ambf_file(Operator):
                 if body_obj_handle.ambf_rigid_body_is_static:
                     body_data['mass'] = 0.0
                 else:
-                    body_data['mass'] = body_obj_handle.ambf_rigid_body_mass
+                    body_data['mass'] = body_obj_handle.ambf_body_mass
                     if body_obj_handle.ambf_rigid_body_specify_inertia:
                         body_data['inertia'] = {'ix': ambf_round(body_obj_handle.ambf_rigid_body_inertia_x),
                                                 'iy': ambf_round(body_obj_handle.ambf_rigid_body_inertia_y),
@@ -1490,7 +1626,7 @@ class AMBF_OT_generate_ambf_file(Operator):
             if body_obj_handle.ambf_rigid_body_is_static:
                 body_data['mass'] = 0.0
             else:
-                body_data['mass'] = ambf_round(body_obj_handle.ambf_rigid_body_mass)
+                body_data['mass'] = ambf_round(body_obj_handle.ambf_body_mass)
                 if body_obj_handle.ambf_rigid_body_specify_inertia:
                     body_data['inertia'] = {'ix': ambf_round(body_obj_handle.ambf_rigid_body_inertia_x),
                                             'iy': ambf_round(body_obj_handle.ambf_rigid_body_inertia_y),
@@ -1600,9 +1736,9 @@ class AMBF_OT_generate_ambf_file(Operator):
 
             body_data['mesh'] = body_obj_handle_name + '.' + output_mesh
             xyz_inertial_off = get_xyz_ordered_dict()
-            xyz_inertial_off['x'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_inertial_offset[0])
-            xyz_inertial_off['y'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_inertial_offset[1])
-            xyz_inertial_off['z'] = ambf_round(body_obj_handle.ambf_rigid_body_linear_inertial_offset[2])
+            xyz_inertial_off['x'] = ambf_round(body_obj_handle.ambf_body_linear_inertial_offset[0])
+            xyz_inertial_off['y'] = ambf_round(body_obj_handle.ambf_body_linear_inertial_offset[1])
+            xyz_inertial_off['z'] = ambf_round(body_obj_handle.ambf_body_linear_inertial_offset[2])
 
             body_data['inertial offset']['position'] = xyz_inertial_off
 
@@ -2278,7 +2414,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         for obj_handle in _heirarichal_objects_list:
             self.generate_body_data_from_ambf_rigid_body(self._adf, obj_handle)
             self.generate_body_data_from_ambf_ghost_object(self._adf, obj_handle)
-            # self.generate_body_data_from_ambf_soft_body(self._adf, obj_handle)
+            self.generate_body_data_from_ambf_soft_body(self._adf, obj_handle)
             self.generate_joint_data_from_ambf_constraint(self._adf, obj_handle)
             self.generate_camera_data_from_ambf_camera(self._adf, obj_handle)
             self.generate_light_data_from_ambf_light(self._adf, obj_handle)
@@ -2295,7 +2431,7 @@ class AMBF_OT_generate_ambf_file(Operator):
         self._adf['sensors'] = self._sensor_names_list
         self._adf['actuators'] = self._actuator_names_list
 
-        print('ADF Data: ', self._adf)
+        # print('ADF Data: ', self._adf)
         
         yaml.dump(self._adf, output_file)
 
@@ -2397,7 +2533,7 @@ class AMBF_OT_save_meshes(Operator):#
             obj_handle_name = remove_namespace_prefix(obj_handle.name)
 
             if obj_handle.type == 'MESH':
-                print("Saving Mesh for Rigid Body: ", obj_handle.name)
+                print("Saving Mesh for Body: ", obj_handle.name)
                 # SAVE HIGH RES / VISUAL MESHES FIRST
                 if context.scene.ambf_save_high_res:
                     print("Saving High Res Mesh for Object: ", obj_handle.name)
@@ -2591,7 +2727,7 @@ class AMBF_OT_toggle_low_res_mesh_modifiers_visibility(Operator):
                 mod.show_viewport = not mod.show_viewport
         return {'FINISHED'}
 
-
+# TODO: decide if soft bodies should be supported
 class AMBF_OT_estimate_inertial_offsets(Operator):
     bl_idname = "ambf.estimate_inertial_offsets"
     bl_label = "Estimate Inertial Offsets"
@@ -2601,9 +2737,9 @@ class AMBF_OT_estimate_inertial_offsets(Operator):
         for obj_handle in bpy.data.objects:
             if obj_handle.ambf_object_type == 'RIGID_BODY' and obj_handle.type == 'MESH':
                 local_com = compute_local_com(obj_handle)
-                obj_handle.ambf_rigid_body_linear_inertial_offset[0] = local_com[0]
-                obj_handle.ambf_rigid_body_linear_inertial_offset[1] = local_com[1]
-                obj_handle.ambf_rigid_body_linear_inertial_offset[2] = local_com[2]
+                obj_handle.ambf_body_linear_inertial_offset[0] = local_com[0]
+                obj_handle.ambf_body_linear_inertial_offset[1] = local_com[1]
+                obj_handle.ambf_body_linear_inertial_offset[2] = local_com[2]
         return {'FINISHED'}
 
 
@@ -2683,7 +2819,7 @@ class AMBF_OT_auto_rename_joints(Operator):
                 pass
         return {'FINISHED'}
 
-
+# TODO: decide if soft bodies should be supported
 class AMBF_OT_estimate_inertial_offset_per_object(Operator):
     bl_idname = "ambf.estimate_inertial_offset_per_object"
     bl_label = "Estimate Inertial Offset"
@@ -2693,9 +2829,9 @@ class AMBF_OT_estimate_inertial_offset_per_object(Operator):
         obj_handle = context.object
         if obj_handle.ambf_object_type == 'RIGID_BODY' and obj_handle.type == 'MESH':
             local_com = compute_local_com(obj_handle)
-            obj_handle.ambf_rigid_body_linear_inertial_offset[0] = local_com[0]
-            obj_handle.ambf_rigid_body_linear_inertial_offset[1] = local_com[1]
-            obj_handle.ambf_rigid_body_linear_inertial_offset[2] = local_com[2]
+            obj_handle.ambf_body_linear_inertial_offset[0] = local_com[0]
+            obj_handle.ambf_body_linear_inertial_offset[1] = local_com[1]
+            obj_handle.ambf_body_linear_inertial_offset[2] = local_com[2]
             pass
         return {'FINISHED'}
 
@@ -2779,7 +2915,6 @@ class AMBF_OT_remove_object_namespaces(Operator):
         for obj_handle in bpy.data.objects:
             obj_handle.name = obj_handle.name.split('/')[-1]
         return {'FINISHED'}
-
 
 class AMBF_OT_load_ambf_file(Operator):
     bl_idname = "ambf.load_ambf_file"
@@ -3180,17 +3315,17 @@ class AMBF_OT_load_ambf_file(Operator):
             color_components = body_data['color components']
             if 'ambient' in color_components:
                 ambient = color_components['ambient']
-                obj_handle.ambf_ghost_ambient_level = ambient.get('level', 1.0)
+                obj_handle.ambf_object_ambient_level = ambient.get('level', 1.0)
             if 'diffuse' in color_components:
                 diffuse = color_components['diffuse']
-                obj_handle.ambf_ghost_diffuse_color[0] = diffuse.get('r', 0.5)
-                obj_handle.ambf_ghost_diffuse_color[1] = diffuse.get('g', 0.5)
-                obj_handle.ambf_ghost_diffuse_color[2] = diffuse.get('b', 0.5)
+                obj_handle.ambf_object_diffuse_color[0] = diffuse.get('r', 0.5)
+                obj_handle.ambf_object_diffuse_color[1] = diffuse.get('g', 0.5)
+                obj_handle.ambf_object_diffuse_color[2] = diffuse.get('b', 0.5)
             if 'specular' in color_components:
                 specular = color_components['specular']
-                obj_handle.ambf_ghost_specular_color[0] = specular.get('r', 0.5)
-                obj_handle.ambf_ghost_specular_color[1] = specular.get('g', 0.5)
-                obj_handle.ambf_ghost_specular_color[2] = specular.get('b', 0.5)
+                obj_handle.ambf_object_specular_color[0] = specular.get('r', 0.5)
+                obj_handle.ambf_object_specular_color[1] = specular.get('g', 0.5)
+                obj_handle.ambf_object_specular_color[2] = specular.get('b', 0.5)
 
         if 'collision mesh type' in body_data:
             obj_handle.ambf_collision_mesh_type = body_data['collision mesh type']
@@ -3261,7 +3396,7 @@ class AMBF_OT_load_ambf_file(Operator):
         
     def load_ambf_rigid_body(self, body_data, obj_handle):
         if obj_handle.type in ['EMPTY', 'MESH']:
-            obj_handle.ambf_rigid_body_mass = body_data['mass']
+            obj_handle.ambf_body_mass = body_data['mass']
 
             if 'gravity' in body_data:
                 obj_handle.ambf_object_override_gravity = True
@@ -3287,13 +3422,13 @@ class AMBF_OT_load_ambf_file(Operator):
                 obj_handle.ambf_rigid_body_is_static = True
 
             if 'inertial offset' in body_data:
-                obj_handle.ambf_rigid_body_linear_inertial_offset[0] = body_data['inertial offset']['position']['x']
-                obj_handle.ambf_rigid_body_linear_inertial_offset[1] = body_data['inertial offset']['position']['y']
-                obj_handle.ambf_rigid_body_linear_inertial_offset[2] = body_data['inertial offset']['position']['z']
+                obj_handle.ambf_body_linear_inertial_offset[0] = body_data['inertial offset']['position']['x']
+                obj_handle.ambf_body_linear_inertial_offset[1] = body_data['inertial offset']['position']['y']
+                obj_handle.ambf_body_linear_inertial_offset[2] = body_data['inertial offset']['position']['z']
 
-                obj_handle.ambf_rigid_body_angular_inertial_offset[0] = body_data['inertial offset']['orientation']['r']
-                obj_handle.ambf_rigid_body_angular_inertial_offset[1] = body_data['inertial offset']['orientation']['p']
-                obj_handle.ambf_rigid_body_angular_inertial_offset[2] = body_data['inertial offset']['orientation']['y']
+                obj_handle.ambf_body_angular_inertial_offset[0] = body_data['inertial offset']['orientation']['r']
+                obj_handle.ambf_body_angular_inertial_offset[1] = body_data['inertial offset']['orientation']['p']
+                obj_handle.ambf_body_angular_inertial_offset[2] = body_data['inertial offset']['orientation']['y']
 
             # Finally add the rigid body data if defined
             if 'friction' in body_data:
@@ -3341,13 +3476,13 @@ class AMBF_OT_load_ambf_file(Operator):
                 else:
                     # This is for legacy ADF, if the shape offset is
                     # not defined set the shape offset equal to the inertial offset
-                    ocs.ambf_collision_shape_linear_offset[0] = obj_handle.ambf_rigid_body_linear_inertial_offset[0]
-                    ocs.ambf_collision_shape_linear_offset[1] = obj_handle.ambf_rigid_body_linear_inertial_offset[1]
-                    ocs.ambf_collision_shape_linear_offset[2] = obj_handle.ambf_rigid_body_linear_inertial_offset[2]
+                    ocs.ambf_collision_shape_linear_offset[0] = obj_handle.ambf_body_linear_inertial_offset[0]
+                    ocs.ambf_collision_shape_linear_offset[1] = obj_handle.ambf_body_linear_inertial_offset[1]
+                    ocs.ambf_collision_shape_linear_offset[2] = obj_handle.ambf_body_linear_inertial_offset[2]
 
-                    ocs.ambf_collision_shape_angular_offset[0] = obj_handle.ambf_rigid_body_angular_inertial_offset[0]
-                    ocs.ambf_collision_shape_angular_offset[1] = obj_handle.ambf_rigid_body_angular_inertial_offset[1]
-                    ocs.ambf_collision_shape_angular_offset[2] = obj_handle.ambf_rigid_body_angular_inertial_offset[2]
+                    ocs.ambf_collision_shape_angular_offset[0] = obj_handle.ambf_body_angular_inertial_offset[0]
+                    ocs.ambf_collision_shape_angular_offset[1] = obj_handle.ambf_body_angular_inertial_offset[1]
+                    ocs.ambf_collision_shape_angular_offset[2] = obj_handle.ambf_body_angular_inertial_offset[2]
                 
                 obj_handle.ambf_collision_type = 'SINGULAR_SHAPE'
             elif 'compound collision shape' in body_data:
@@ -4559,7 +4694,103 @@ class AMBF_OT_ambf_rigid_body_activate(Operator):
             context.object.ambf_object_type = 'NONE'
 
         return {'FINISHED'}
+
+class AMBF_OT_ambf_move_collision_mesh_to_body_origin(Operator):
+    bl_idname = "ambf.ambf_move_collision_mesh_to_body_origin"
+    bl_label = "Move collision mesh to body origin"
+    bl_description = "Move the collision mesh to the correct location (i.e. body's origin, this is where AMBF will consider this mesh)"
+
+    def execute(self, context):
+        collision_mesh_obj = context.object.ambf_collision_mesh
+        mesh_obj = get_active_object()
+        if collision_mesh_obj is not None:
+            collision_mesh_obj.matrix_world = mesh_obj.matrix_world.copy()
+            make_obj1_parent_of_obj2(collision_mesh_obj, mesh_obj)
+            select_object(collision_mesh_obj, False)
+            select_object(mesh_obj)
+            set_active_object(mesh_obj)
+        return {'FINISHED'}
+
+class AMBF_OT_ambf_collision_mesh_use_current_location(Operator):
+    bl_idname = "ambf.ambf_collision_mesh_use_current_location"
+    bl_label = "Use current location of collision mesh"
+    bl_description = "Use the current location of the collision mesh (i.e. set its origin to be at the origin of the AMBF object without moving it)"
+
+    def execute(self, context):
+        collision_mesh_obj = context.object.ambf_collision_mesh
+        mesh_obj = get_active_object()
+        if collision_mesh_obj is not None:
+            T_rb_w = mesh_obj.matrix_world.copy()
+            T_c_w = collision_mesh_obj.matrix_world.copy()
+            T_c_rb = T_rb_w.inverted() @ T_c_w
+            collision_mesh_obj.matrix_world = T_rb_w
+            collision_mesh_obj.data.vertices.data.transform(T_c_rb)
+        return {'FINISHED'}
     
+"""******************* START OBJECT OT *******************"""
+class OBJECT_OT_ClearFidexNodes(Operator):
+    bl_idname = "object.clear_fixed_nodes"
+    bl_label = "Clear Fixed Nodes"
+    bl_description = "Clear all fixed nodes"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.object
+        obj.ambf_soft_body_properties.ambf_soft_body_fixed_nodes.clear()
+        self.report({'INFO'}, "Cleared all fixed nodes.")
+        return {'FINISHED'}
+    
+class OBJECT_OT_AddFixedNodesFromSelection(Operator):
+    bl_idname = "object.add_fixed_nodes_from_selection"
+    bl_label = "Add Fixed Nodes from Selection"
+    bl_description = "Add selected vertices as fixed nodes"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        obj = context.object
+        if obj.mode != 'EDIT':
+            self.report({'WARNING'}, "You need to be in Edit Mode to select vertices.")
+            return {'CANCELLED'}
+        
+        # Access the bmesh to get selected vertices
+        bm = bmesh.from_edit_mesh(obj.data)
+        selected_verts = [v.index for v in bm.verts if v.select]
+        
+        if not selected_verts:
+            self.report({'WARNING'}, "No vertices selected.")
+            return {'CANCELLED'}
+        
+        # Add selected vertex indices to the collection property
+        for index in selected_verts:
+            item = obj.ambf_soft_body_properties.ambf_soft_body_fixed_nodes.add()
+            item.node_index = index
+        
+        self.report({'INFO'}, f"Added {len(selected_verts)} fixed nodes.")
+        return {'FINISHED'}
+
+class OBJECT_OT_RemoveFixedNode(bpy.types.Operator):
+    bl_idname = "object.remove_fixed_node"
+    bl_label = "Remove Fixed Node"
+    bl_description = "Remove this fixed node"
+    
+    index: bpy.props.IntProperty()
+    
+    def execute(self, context):
+        obj = context.object
+        collection = obj.ambf_soft_body_properties.ambf_soft_body_fixed_nodes
+        idx_to_remove = None
+        for idx, item in enumerate(collection):
+            if item.node_index == self.index:
+                idx_to_remove = idx
+                break
+        if idx_to_remove is not None:
+            collection.remove(idx_to_remove)
+            self.report({'INFO'}, f"Removed fixed node {self.index}")
+            return {'FINISHED'}
+        else:
+            self.report({'WARNING'}, "Fixed node not found.")
+            return {'CANCELLED'}
+
 class AMBF_OT_ambf_camera_activate(Operator):
     """Add Camera Properties"""
     bl_label = "AMBF CAMERA ACTIVATE"
@@ -4655,40 +4886,6 @@ class AMBF_OT_ambf_constraint_activate(Operator):
         else:
             context.object.ambf_object_type = 'NONE'
 
-        return {'FINISHED'}
-
-
-class AMBF_OT_ambf_move_collision_mesh_to_body_origin(Operator):
-    bl_idname = "ambf.ambf_move_collision_mesh_to_body_origin"
-    bl_label = "Move collision mesh to body origin"
-    bl_description = "Move the collision mesh to the correct location (i.e. body's origin, this is where AMBF will consider this mesh)"
-
-    def execute(self, context):
-        collision_mesh_obj = context.object.ambf_collision_mesh
-        mesh_obj = get_active_object()
-        if collision_mesh_obj is not None:
-            collision_mesh_obj.matrix_world = mesh_obj.matrix_world.copy()
-            make_obj1_parent_of_obj2(collision_mesh_obj, mesh_obj)
-            select_object(collision_mesh_obj, False)
-            select_object(mesh_obj)
-            set_active_object(mesh_obj)
-        return {'FINISHED'}
-
-
-class AMBF_OT_ambf_collision_mesh_use_current_location(Operator):
-    bl_idname = "ambf.ambf_collision_mesh_use_current_location"
-    bl_label = "Use current location of collision mesh"
-    bl_description = "Use the current location of the collision mesh (i.e. set its origin to be at the origin of the AMBF object without moving it)"
-
-    def execute(self, context):
-        collision_mesh_obj = context.object.ambf_collision_mesh
-        mesh_obj = get_active_object()
-        if collision_mesh_obj is not None:
-            T_rb_w = mesh_obj.matrix_world.copy()
-            T_c_w = collision_mesh_obj.matrix_world.copy()
-            T_c_rb = T_rb_w.inverted() @ T_c_w
-            collision_mesh_obj.matrix_world = T_rb_w
-            collision_mesh_obj.data.vertices.data.transform(T_c_rb)
         return {'FINISHED'}
 
 class OBJECT_PT_DebuggerPanel(bpy.types.Panel):
@@ -4998,7 +5195,6 @@ class AMBF_PT_ambf_rigid_body(Panel):
 
         if context.object.ambf_object_type == 'RIGID_BODY':
             layout.separator() 
-            layout.separator()
 
             col = layout.column()
             col.prop(context.object, 'ambf_object_visible', toggle=True)
@@ -5016,7 +5212,7 @@ class AMBF_PT_ambf_rigid_body(Panel):
             col = row.row()
             col.enabled = not context.object.ambf_rigid_body_is_static
             col.alignment = 'EXPAND'
-            col.prop(context.object, 'ambf_rigid_body_mass')
+            col.prop(context.object, 'ambf_body_mass')
 
             col = box.row()
             col.prop(context.object, 'ambf_object_override_gravity')
@@ -5057,12 +5253,12 @@ class AMBF_PT_ambf_rigid_body(Panel):
             col = box.column()
             col = col.split(factor=0.5)
             col.alignment = 'EXPAND'
-            col.prop(context.object, 'ambf_rigid_body_linear_inertial_offset')
+            col.prop(context.object, 'ambf_body_linear_inertial_offset')
             
             col = col.column()
             col.enabled = False
             col.alignment = 'EXPAND'
-            col.prop(context.object, 'ambf_rigid_body_angular_inertial_offset')
+            col.prop(context.object, 'ambf_body_angular_inertial_offset')
             
             layout.separator()
 
@@ -5211,6 +5407,364 @@ class AMBF_PT_ambf_rigid_body(Panel):
             col.prop(context.object, 'ambf_rigid_body_publish_joint_positions')
             col.enabled = not context.object.ambf_body_passive
 
+class AMBF_PT_ambf_soft_body(bpy.types.Panel):
+    """Add Soft Body Properties"""
+    bl_label = "AMBF SOFT BODY PROPERTIES"
+    bl_idname = "AMBF_PT_ambf_soft_body"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "physics"
+    
+    @classmethod
+    def poll(cls, context):
+        active_obj_handle = context.object
+        return active_obj_handle and active_obj_handle.type == 'MESH'
+    
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        
+        col = layout.row()
+        col.alignment = 'EXPAND'
+        col.scale_y = 2
+        col.operator('ambf.ambf_soft_body_activate', text='Enable AMBF Soft Body', icon='RNA_ADD')
+        
+        if obj.ambf_object_type == 'SOFT_BODY':
+            layout.separator()
+            # Basic Properties
+            box = layout.box()
+            box.label(text="Basic Properties")
+            box.prop(obj, 'name')
+            box.prop(obj, 'ambf_body_mass')
+            box.prop(obj, 'ambf_scale')
+
+            # Color components
+            col = box.column()
+            col.label(text="Color Components:")
+            row = col.row()
+            row.prop(obj, 'ambf_object_ambient_level', text="Ambient Level")
+            row.prop(obj, 'ambf_body_transparency', text="Transparency")
+            row = col.row()
+            row.prop(obj, 'ambf_object_diffuse_color', text="Diffuse Color")
+            row = col.row()
+            row.prop(obj, 'ambf_object_specular_color', text="Specular Color")
+
+            # Namespace
+            row = layout.row()
+            row.prop(obj, 'ambf_soft_body_namespace')
+
+            row = box.row()
+            row.prop(obj, 'ambf_collision_margin_enable', text="Enable Collision Margin")
+            if obj.ambf_collision_margin_enable:
+                box.prop(obj, 'ambf_collision_margin')
+
+            # Inertial Offsets
+            box = layout.box()
+            row = box.row()
+            row.label(text="Inertial Offsets")
+            col = box.column()
+            col = col.split(factor=0.5)
+            col.alignment = 'EXPAND'
+            col.prop(obj, 'ambf_body_linear_inertial_offset')
+            col = col.column()
+            col.alignment = 'EXPAND'
+            col.prop(obj, 'ambf_body_angular_inertial_offset')
+
+            # # Stiffness Properties
+            # box = layout.box()
+            # box.label(text="Stiffness Properties")
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_linear_stiffness', text="Enable Linear Stiffness")
+            # if obj.ambf_soft_body_enable_linear_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_linear_stiffness')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_angular_stiffness', text="Enable Angular Stiffness")
+            # if obj.ambf_soft_body_enable_angular_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_angular_stiffness')
+            
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_volume_stiffness', text="Enable Volume Stiffness")
+            # if obj.ambf_soft_body_enable_volume_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_volume_stiffness')
+
+            # # Damping and Drag Properties
+            # box = layout.box()
+            # box.label(text="Damping and Drag Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_damping', text="Enable Damping")
+            # if obj.ambf_soft_body_enable_damping:
+            #     box.prop(obj, 'ambf_soft_body_velocity_damping')
+            
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_drag', text="Enable Drag")
+            # if obj.ambf_soft_body_enable_drag:
+            #     box.prop(obj, 'ambf_soft_body_drag_coefficient')
+
+            # # Friction Properties
+            # box = layout.box()
+            # box.label(text="Friction Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_friction', text="Enable Friction")
+            # if obj.ambf_soft_body_enable_friction:
+            #     box.prop(obj, 'ambf_soft_body_dynamic_friction')
+
+            # # Aerodynamics and Pressure Properties
+            # box = layout.box()
+            # box.label(text="Aerodynamic and Pressure Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_aerodynamics', text="Enable Aerodynamics")
+            # if obj.ambf_soft_body_enable_aerodynamics:
+            #     box.prop(obj, 'ambf_soft_body_lift_coefficient')
+
+            # # Pressure and Volume Conservation Properties
+            # box = layout.box()
+            # box.label(text="Pressure and Volume Conservation Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_pressure', text="Enable Pressure")
+            # if obj.ambf_soft_body_enable_pressure:
+            #     box.prop(obj, 'ambf_soft_body_pressure_coefficient')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_volume_conservation', text="Enable Volume Conservation")
+            # if obj.ambf_soft_body_enable_volume_conservation:
+            #     box.prop(obj, 'ambf_soft_body_volume_conservation')
+
+            # # Hardness Properties
+            # box = layout.box()
+            # box.label(text="Hardness Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_collision_hardness', text="Enable Collision Hardness")
+            # if obj.ambf_soft_body_enable_collision_hardness:
+            #     box.prop(obj, 'ambf_soft_body_collision_hardness')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_kinetic_hardness', text="Enable Kinetic Hardness")
+            # if obj.ambf_soft_body_enable_kinetic_hardness:
+            #     box.prop(obj, 'ambf_soft_body_kinetic_hardness')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_shear_hardness', text="Enable Shear Hardness")
+            # if obj.ambf_soft_body_enable_shear_hardness:
+            #     box.prop(obj, 'ambf_soft_body_shear_hardness')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_deformation_friction', text="Enable Deformation Friction")
+            # if obj.ambf_soft_body_enable_deformation_friction:
+            #     box.prop(obj, 'ambf_soft_body_deformation_friction')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_pose_matching', text="Enable Pose Matching")
+            # if obj.ambf_soft_body_enable_pose_matching:
+            #     box.prop(obj, 'ambf_soft_body_pose_matching')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_anchor_hardness', text="Enable Anchor Hardness")
+            # if obj.ambf_soft_body_enable_anchor_hardness:
+            #     box.prop(obj, 'ambf_soft_body_anchor_hardness')
+
+            # # Cluster-Related Stiffness Properties
+            # box = layout.box()
+            # box.label(text="Cluster-Related Stiffness Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_srhr_cl_stiffness', text="Enable SRHR_CL Stiffness")
+            # if obj.ambf_soft_body_enable_srhr_cl_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_srhr_cl_stiffness')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_skhr_cl_stiffness', text="Enable SKHR_CL Stiffness")
+            # if obj.ambf_soft_body_enable_skhr_cl_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_skhr_cl_stiffness')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_ssHR_cl_stiffness', text="Enable SSHR_CL Stiffness")
+            # if obj.ambf_soft_body_enable_ssHR_cl_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_ssHR_cl_stiffness')
+
+            # # Cluster Split Stiffness Properties
+            # box = layout.box()
+            # box.label(text="Cluster Split Stiffness Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_sr_splt_cl_stiffness', text="Enable SR_SPLT_CL Stiffness")
+            # if obj.ambf_soft_body_enable_sr_splt_cl_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_sr_splt_cl_stiffness')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_sk_splt_cl_stiffness', text="Enable SK_SPLT_CL Stiffness")
+            # if obj.ambf_soft_body_enable_sk_splt_cl_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_sk_splt_cl_stiffness')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_ss_splt_cl_stiffness', text="Enable SS_SPLT_CL Stiffness")
+            # if obj.ambf_soft_body_enable_ss_splt_cl_stiffness:
+            #     box.prop(obj, 'ambf_soft_body_ss_splt_cl_stiffness')
+
+            # # Maximum Volume and Timescale Properties
+            # box = layout.box()
+            # box.label(text="Volume and Timescale Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_max_volume', text="Enable Max Volume")
+            # if obj.ambf_soft_body_enable_max_volume:
+            #     box.prop(obj, 'ambf_soft_body_max_volume')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_timescale', text="Enable Timescale")
+            # if obj.ambf_soft_body_enable_timescale:
+            #     box.prop(obj, 'ambf_soft_body_timescale')
+
+            # # Iterations Properties
+            # box = layout.box()
+            # box.label(text="Iterations Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_velocity_iterations', text="Enable Velocity Iterations")
+            # if obj.ambf_soft_body_enable_velocity_iterations:
+            #     box.prop(obj, 'ambf_soft_body_velocity_iterations')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_position_iterations', text="Enable Position Iterations")
+            # if obj.ambf_soft_body_enable_position_iterations:
+            #     box.prop(obj, 'ambf_soft_body_position_iterations')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_deformation_iterations', text="Enable Deformation Iterations")
+            # if obj.ambf_soft_body_enable_deformation_iterations:
+            #     box.prop(obj, 'ambf_soft_body_deformation_iterations')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_collision_iterations', text="Enable Collision Iterations")
+            # if obj.ambf_soft_body_enable_collision_iterations:
+            #     box.prop(obj, 'ambf_soft_body_collision_iterations')
+
+            # # Flags, Bending, and Cutting Properties
+            # box = layout.box()
+            # box.label(text="Flags, Bending, and Cutting Properties")
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_flags', text="Enable Flags")
+            # if obj.ambf_soft_body_enable_flags:
+            #     box.prop(obj, 'ambf_soft_body_flags')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_bending_constraint', text="Enable Bending Constraint")
+            # if obj.ambf_soft_body_enable_bending_constraint:
+            #     box.prop(obj, 'ambf_soft_body_bending_constraint')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_cutting_enabled', text="Enable Cutting")
+            # if obj.ambf_soft_body_enable_cutting_enabled:
+            #     box.prop(obj, 'ambf_soft_body_cutting_enabled')
+
+            # row = box.row()
+            # row.prop(obj, 'ambf_soft_body_enable_clusters', text="Enable Clusters")
+            # if obj.ambf_soft_body_enable_clusters:
+            #     box.prop(obj, 'ambf_soft_body_clusters')
+
+            prop_groups = [
+                ("Stiffness Properties", [
+                    ('ambf_soft_body_enable_linear_stiffness', 'ambf_soft_body_linear_stiffness', "Linear Stiffness"),
+                    ('ambf_soft_body_enable_angular_stiffness', 'ambf_soft_body_angular_stiffness', "Angular Stiffness"),
+                    ('ambf_soft_body_enable_volume_stiffness', 'ambf_soft_body_volume_stiffness', "Volume Stiffness")
+                ]),
+                ("Damping and Drag Properties", [
+                    ('ambf_soft_body_enable_damping', 'ambf_soft_body_velocity_damping', "Velocity Damping"),
+                    ('ambf_soft_body_enable_drag', 'ambf_soft_body_drag_coefficient', "Drag Coefficient")
+                ]),
+                ("Friction Properties", [
+                    ('ambf_soft_body_enable_friction', 'ambf_soft_body_dynamic_friction', "Dynamic Friction")
+                ]),
+                ("Aerodynamic Properties", [
+                    ('ambf_soft_body_enable_aerodynamics', 'ambf_soft_body_lift_coefficient', "Lift Coefficient")
+                ]),
+                ("Pressure and Volume Conservation Properties", [
+                    ('ambf_soft_body_enable_pressure', 'ambf_soft_body_pressure_coefficient', "Pressure Coefficient"),
+                    ('ambf_soft_body_enable_volume_conservation', 'ambf_soft_body_volume_conservation', "Volume Conservation")
+                ]),
+                ("Hardness Properties", [
+                    ('ambf_soft_body_enable_collision_hardness', 'ambf_soft_body_collision_hardness', "Collision Hardness"),
+                    ('ambf_soft_body_enable_kinetic_hardness', 'ambf_soft_body_kinetic_hardness', "Kinetic Hardness"),
+                    ('ambf_soft_body_enable_shear_hardness', 'ambf_soft_body_shear_hardness', "Shear Hardness"),
+                    ('ambf_soft_body_enable_deformation_friction', 'ambf_soft_body_deformation_friction', "Deformation Friction"),
+                    ('ambf_soft_body_enable_pose_matching', 'ambf_soft_body_pose_matching', "Pose Matching"),
+                    ('ambf_soft_body_enable_anchor_hardness', 'ambf_soft_body_anchor_hardness', "Anchor Hardness")
+                ]),
+                ("Cluster-Related Stiffness Properties", [
+                    ('ambf_soft_body_enable_srhr_cl_stiffness', 'ambf_soft_body_srhr_cl_stiffness', "SRHR_CL Stiffness"),
+                    ('ambf_soft_body_enable_skhr_cl_stiffness', 'ambf_soft_body_skhr_cl_stiffness', "SKHR_CL Stiffness"),
+                    ('ambf_soft_body_enable_sshr_cl_stiffness', 'ambf_soft_body_sshr_cl_stiffness', "SSHR_CL Stiffness")
+                ]),
+                ("Cluster Split Stiffness Properties", [
+                    ('ambf_soft_body_enable_sr_splt_cl_stiffness', 'ambf_soft_body_sr_splt_cl_stiffness', "SR_SPLT_CL Stiffness"),
+                    ('ambf_soft_body_enable_sk_splt_cl_stiffness', 'ambf_soft_body_sk_splt_cl_stiffness', "SK_SPLT_CL Stiffness"),
+                    ('ambf_soft_body_enable_ss_splt_cl_stiffness', 'ambf_soft_body_ss_splt_cl_stiffness', "SS_SPLT_CL Stiffness")
+                ]),
+                ("Volume and Timescale Properties", [
+                    ('ambf_soft_body_enable_max_volume', 'ambf_soft_body_max_volume', "Maximum Volume"),
+                    ('ambf_soft_body_enable_timescale', 'ambf_soft_body_timescale', "Timescale")
+                ]),
+                ("Iterations Properties", [
+                    ('ambf_soft_body_enable_velocity_iterations', 'ambf_soft_body_velocity_iterations', "Velocity Iterations"),
+                    ('ambf_soft_body_enable_position_iterations', 'ambf_soft_body_position_iterations', "Position Iterations"),
+                    ('ambf_soft_body_enable_deformation_iterations', 'ambf_soft_body_deformation_iterations', "Deformation Iterations"),
+                    ('ambf_soft_body_enable_collision_iterations', 'ambf_soft_body_collision_iterations', "Collision Iterations")
+                ]),
+                ("Flags and Cutting Properties", [
+                    ('ambf_soft_body_enable_flags', 'ambf_soft_body_flags', "Flags"),
+                    ('ambf_soft_body_enable_cutting_enabled', 'ambf_soft_body_cutting_enabled', "Cutting Enabled")
+                ])
+            ]
+
+            for group_name, properties in prop_groups:
+                box = layout.box()
+                box.label(text=group_name)
+                for toggle_attr, value_attr, label in properties:
+                    self._draw_toggle_and_value(box, obj.ambf_soft_body_properties, toggle_attr, value_attr, label)
+
+            row = box.row()
+            row.prop(obj, 'ambf_soft_body_enable_fixed_nodes', text="Enable Fixed Nodes")
+            if obj.ambf_soft_body_enable_fixed_nodes:
+                # Instructions for the user
+                row = layout.row()
+                row.label(text="Select vertices in Edit Mode and click:")
+
+                # Button to add fixed nodes from selection
+                row = layout.row()
+                row.operator("object.add_fixed_nodes_from_selection", text="Add Fixed Nodes from Selection")
+                row.operator("object.clear_fixed_nodes", text="", icon='TRASH')
+
+                # Display the list of fixed nodes
+                if obj.ambf_soft_body_properties.ambf_soft_body_fixed_nodes:
+                    box = layout.box()
+                    box.label(text="Fixed Nodes:")
+                    for item in obj.ambf_soft_body_properties.ambf_soft_body_fixed_nodes:
+                        row = box.row()
+                        row.label(text=f"Index: {item.node_index}")
+                        op = row.operator("object.remove_fixed_node", text="", icon='X')
+                        op.index = item.node_index
+                else:
+                    row = layout.row()
+                    row.label(text="No fixed nodes added.")
+
+            # Randomize Constraints
+            box = layout.box()
+            box.label(text="Randomize Constraints")
+            row = box.row()
+            row.prop(obj, 'ambf_soft_body_randomize_constraints', text="Randomize Constraints")
+            
+    def _draw_toggle_and_value(self, box, soft_body, toggle_prop, value_prop, label):
+        """Helper function to draw a toggle and its corresponding value."""
+        row = box.row()
+        row.prop(soft_body, toggle_prop, text=f"Enable {label}")
+        if getattr(soft_body, toggle_prop):
+            box.prop(soft_body, value_prop, text=label)
 
 class AMBF_PT_ambf_ghost_object(Panel):
     """Add Ghost Object Properties"""
@@ -5239,6 +5793,9 @@ class AMBF_PT_ambf_ghost_object(Panel):
 
         if context.object.ambf_object_type == 'GHOST_OBJECT':
             layout.separator()
+            col = layout.column()
+            col.prop(context.object, 'ambf_object_visible', toggle=True)
+            col.scale_y = 2.0
 
             col = layout.column()
             col.enabled = False
@@ -5256,12 +5813,12 @@ class AMBF_PT_ambf_ghost_object(Panel):
             col = box.column()
             col.label(text="Color Components:")
             row = col.row()
-            row.prop(context.object, 'ambf_ghost_ambient_level', text="Ambient Level")
+            row.prop(context.object, 'ambf_object_ambient_level', text="Ambient Level")
             row.prop(context.object, 'ambf_body_transparency', text="Transparency")
             row = col.row()
-            row.prop(context.object, 'ambf_ghost_diffuse_color', text="Diffuse Color")
+            row.prop(context.object, 'ambf_object_diffuse_color', text="Diffuse Color")
             row = col.row()
-            row.prop(context.object, 'ambf_ghost_specular_color', text="Specular Color")
+            row.prop(context.object, 'ambf_object_specular_color', text="Specular Color")
 
             # Collision properties
             box = layout.box()
@@ -5313,7 +5870,6 @@ class AMBF_PT_ambf_ghost_object(Panel):
 
             col.prop(context.object, 'ambf_scale', text="Scale")
             col.prop(context.object, 'ambf_body_passive')
-
 
 class AMBF_PT_ambf_constraint(Panel):
     """Add Body Properties"""
@@ -5782,83 +6338,6 @@ class AMBF_PT_ambf_sensor(Panel):
             #     row = layout.row()
             #     row.prop(obj, 'ambf_sensor_frequency', text="Publish Frequency")
 
-
-class AMBF_PT_ambf_soft_body(bpy.types.Panel):
-    """Add Soft Body Properties"""
-    bl_label = "AMBF SOFT BODY PROPERTIES"
-    bl_idname = "AMBF_PT_ambf_soft_body"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "physics"
-    
-    @classmethod
-    def poll(cls, context):
-        active_obj_handle = context.object
-        return active_obj_handle and active_obj_handle.type == 'MESH'
-    
-    def draw(self, context):
-        layout = self.layout
-        obj = context.object
-        
-        col = layout.row()
-        col.alignment = 'EXPAND'
-        col.scale_y = 2
-        col.operator('ambf.ambf_soft_body_activate', text='Enable AMBF Soft Body', icon='RNA_ADD')
-        
-        if obj.ambf_object_type == 'SOFT_BODY':
-            layout.separator()
-            layout.separator()
-
-            # Namespace
-            row = layout.row()
-            row.prop(obj, 'ambf_soft_body_namespace')
-
-            # Stiffness Properties
-            box = layout.box()
-            box.label(text="Stiffness Properties")
-            box.prop(obj, 'ambf_soft_body_linear_stiffness')
-            box.prop(obj, 'ambf_soft_body_angular_stiffness')
-            box.prop(obj, 'ambf_soft_body_volume_stiffness')
-
-            # Damping and Friction
-            box = layout.box()
-            box.label(text="Damping and Friction Properties")
-            box.prop(obj, 'ambf_soft_body_velocity_damping')
-            box.prop(obj, 'ambf_soft_body_drag_coefficient')
-            box.prop(obj, 'ambf_soft_body_dynamic_friction')
-
-            # Aerodynamics and Pressure
-            box = layout.box()
-            box.label(text="Aerodynamic and Pressure Properties")
-            box.prop(obj, 'ambf_soft_body_lift_coefficient')
-            box.prop(obj, 'ambf_soft_body_pressure_coefficient')
-            box.prop(obj, 'ambf_soft_body_volume_conservation')
-
-            # Hardness Properties
-            box = layout.box()
-            box.label(text="Hardness Properties")
-            box.prop(obj, 'ambf_soft_body_collision_hardness')
-            box.prop(obj, 'ambf_soft_body_kinetic_hardness')
-            box.prop(obj, 'ambf_soft_body_shear_hardness')
-
-            # Other Properties
-            box = layout.box()
-            box.label(text="Additional Properties")
-            box.prop(obj, 'ambf_soft_body_max_volume')
-            box.prop(obj, 'ambf_soft_body_timescale')
-            box.prop(obj, 'ambf_soft_body_velocity_iterations')
-            box.prop(obj, 'ambf_soft_body_position_iterations')
-            box.prop(obj, 'ambf_soft_body_deformation_iterations')
-            box.prop(obj, 'ambf_soft_body_collision_iterations')
-
-            # Flags and Cutting
-            box = layout.box()
-            box.label(text="Flags and Cutting Properties")
-            box.prop(obj, 'ambf_soft_body_flags')
-            box.prop(obj, 'ambf_soft_body_cutting_enabled')
-            box.prop(obj, 'ambf_soft_body_clusters')
-            box.prop(obj, 'ambf_soft_body_fixed_nodes')
-
 class AMBF_PG_CollisionShapePropGroup(PropertyGroup):
     ambf_collision_shape_radius: FloatProperty \
             (
@@ -5954,136 +6433,316 @@ class GhostObjectProperties(PropertyGroup):
     )
     # ambf_collision_geometry: StringProperty(name="Collision Geometry", default="*box_geometry")
     Object.ambf_ghost_collision_geometry = FloatVectorProperty(name="Collision Geometry", size=3, default=(0.0, 0.0, 0.0))
-    
-    # Ambient color component
-    Object.ambf_ghost_ambient_level = FloatProperty(name="Ambient Level", min=0, max=1, default=1.0) # Level = 1.0
 
-    # Diffuse color component
-    Object.ambf_ghost_diffuse_color  = FloatVectorProperty(
-        name="Diffuse Color",
-        subtype="COLOR",
-        size=3,
-        min=0,
-        max=1,
-        default=(0.5, 0.5, 0.5) # r=0.5, g=0.5, b=0.5
-    )
-
-    # Specular color component
-    Object.ambf_ghost_specular_color = FloatVectorProperty(
-        name="Specular Color",
-        subtype="COLOR",
-        size=3,
-        min=0,
-        max=1,
-        default=(0.5, 0.05, 0.05)  # r=0.5, g=0.05, b=0.05
-    )
-
+class FixedNodeItem(PropertyGroup):
+    node_index: IntProperty(name="Fixed Node Index")
 
 class SoftBodyProperties(PropertyGroup):
-    Object.ambf_soft_body_namespace = bpy.props.StringProperty(
+    ambf_soft_body_namespace: StringProperty(
         name="Namespace",
         default="/ambf/env/"
     )
 
     # Stiffness properties
-    Object.ambf_soft_body_linear_stiffness = bpy.props.FloatProperty(
-        name="kLST (Linear Stiffness)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_enable_linear_stiffness: BoolProperty(
+        name="Enable Linear Stiffness", default=False
     )
-    
-    Object.ambf_soft_body_angular_stiffness = bpy.props.FloatProperty(
-        name="kAST (Angular Stiffness)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_linear_stiffness: FloatProperty(
+        name="kLST (Linear Stiffness)", default=0.05, min=-float('inf'), max=float('inf')
     )
-
-    Object.ambf_soft_body_volume_stiffness = bpy.props.FloatProperty(
-        name="kVST (Volume Stiffness)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_enable_angular_stiffness: BoolProperty(
+        name="Enable Angular Stiffness", default=False
+    )
+    ambf_soft_body_angular_stiffness: FloatProperty(
+        name="kAST (Angular Stiffness)", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_volume_stiffness: BoolProperty(
+        name="Enable Volume Stiffness", default=False
+    )
+    ambf_soft_body_volume_stiffness: FloatProperty(
+        name="kVST (Volume Stiffness)", default=0.05, min=-float('inf'), max=float('inf')
     )
 
     # Damping and drag properties
-    Object.ambf_soft_body_velocity_damping = bpy.props.FloatProperty(
-        name="kVCF (Velocity Damping Coefficient)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_enable_damping: BoolProperty(
+        name="Enable Damping", default=False
     )
-
-    Object.ambf_soft_body_drag_coefficient = bpy.props.FloatProperty(
-        name="kDP (Drag Coefficient)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_velocity_damping: FloatProperty(
+        name="kVCF (Velocity Damping Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_drag: BoolProperty(
+        name="Enable Drag", default=False
+    )
+    ambf_soft_body_drag_coefficient: FloatProperty(
+        name="kDP (Drag Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
     )
 
     # Friction properties
-    Object.ambf_soft_body_dynamic_friction = bpy.props.FloatProperty(
-        name="kDG (Dynamic Friction Coefficient)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_enable_friction: BoolProperty(
+        name="Enable Friction", default=False
+    )
+    ambf_soft_body_dynamic_friction: FloatProperty(
+        name="kDG (Dynamic Friction Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
     )
 
     # Aerodynamic properties
-    Object.ambf_soft_body_lift_coefficient = bpy.props.FloatProperty(
-        name="kLF (Lift Coefficient)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_enable_aerodynamics: BoolProperty(
+        name="Enable Aerodynamics", default=False
+    )
+    ambf_soft_body_lift_coefficient: FloatProperty(
+        name="kLF (Lift Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
     )
 
     # Pressure and volume conservation properties
-    Object.ambf_soft_body_pressure_coefficient = bpy.props.FloatProperty(
-        name="kPR (Pressure Coefficient)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_enable_pressure: BoolProperty(
+        name="Enable Pressure", default=False
     )
-
-    Object.ambf_soft_body_volume_conservation = bpy.props.FloatProperty(
-        name="kVC (Volume Conservation Coefficient)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_pressure_coefficient: FloatProperty(
+        name="kPR (Pressure Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_volume_conservation: BoolProperty(
+        name="Enable Volume Conservation", default=False
+    )
+    ambf_soft_body_volume_conservation: FloatProperty(
+        name="kVC (Volume Conservation Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
     )
 
     # Hardness properties
-    Object.ambf_soft_body_collision_hardness = bpy.props.FloatProperty(
-        name="kCHR (Collision Hardening Coefficient)", default=0.05, min=0.01, max=0.1
+    ambf_soft_body_enable_collision_hardness: BoolProperty(
+        name="Enable Collision Hardness", default=False
+    )
+    ambf_soft_body_collision_hardness: FloatProperty(
+        name="kCHR (Collision Hardening Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_kinetic_hardness: BoolProperty(
+        name="Enable Kinetic Hardness", default=False
+    )
+    ambf_soft_body_kinetic_hardness: FloatProperty(
+        name="kKHR (Kinetic Hardening Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_shear_hardness: BoolProperty(
+        name="Enable Shear Hardness", default=False
+    )
+    ambf_soft_body_shear_hardness: FloatProperty(
+        name="kSHR (Shear Hardening Coefficient)", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_deformation_friction: BoolProperty(
+        name="Enable Deformation Friction", default=False
+    )
+    ambf_soft_body_deformation_friction: FloatProperty(
+        name="kDF (Deformation Friction)", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_pose_matching: BoolProperty(
+        name="Enable Pose Matching", default=False
+    )
+    ambf_soft_body_pose_matching: FloatProperty(
+        name="kMT (Pose Matching)", default=0.0, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_anchor_hardness: BoolProperty(
+        name="Enable Anchor Hardness", default=False
+    )
+    ambf_soft_body_anchor_hardness: FloatProperty(
+        name="kAHR (Anchor Hardness)", default=0.05, min=-float('inf'), max=float('inf')
     )
 
-    Object.ambf_soft_body_kinetic_hardness = bpy.props.FloatProperty(
-        name="kKHR (Kinetic Hardening Coefficient)", default=0.05, min=0.01, max=0.1
+    # Cluster-related stiffness properties
+    ambf_soft_body_enable_srhr_cl_stiffness: BoolProperty(
+        name="Enable SRHR_CL Stiffness", default=False
+    )
+    ambf_soft_body_srhr_cl_stiffness: FloatProperty(
+        name="kSRHR_CL", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_skhr_cl_stiffness: BoolProperty(
+        name="Enable SKHR_CL Stiffness", default=False
+    )
+    ambf_soft_body_skhr_cl_stiffness: FloatProperty(
+        name="kSKHR_CL", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_sshr_cl_stiffness: BoolProperty(
+        name="Enable SSHR_CL Stiffness", default=False
+    )
+    ambf_soft_body_sshr_cl_stiffness: FloatProperty(
+        name="kSSHR_CL", default=0.05, min=-float('inf'), max=float('inf')
     )
 
-    Object.ambf_soft_body_shear_hardness = bpy.props.FloatProperty(
-        name="kSHR (Shear Hardening Coefficient)", default=0.05, min=0.01, max=0.1
+    # Cluster Split Stiffness Properties
+    ambf_soft_body_enable_sr_splt_cl_stiffness: BoolProperty(
+        name="Enable SR_SPLT_CL Stiffness", default=False
+    )
+    ambf_soft_body_sr_splt_cl_stiffness: FloatProperty(
+        name="kSR_SPLT_CL", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_sk_splt_cl_stiffness: BoolProperty(
+        name="Enable SK_SPLT_CL Stiffness", default=False
+    )
+    ambf_soft_body_sk_splt_cl_stiffness: FloatProperty(
+        name="kSK_SPLT_CL", default=0.05, min=-float('inf'), max=float('inf')
+    )
+    ambf_soft_body_enable_ss_splt_cl_stiffness: BoolProperty(
+        name="Enable SS_SPLT_CL Stiffness", default=False
+    )
+    ambf_soft_body_ss_splt_cl_stiffness: FloatProperty(
+        name="kSS_SPLT_CL", default=0.05, min=-float('inf'), max=float('inf')
     )
 
     # Maximum volume property
-    Object.ambf_soft_body_max_volume = bpy.props.FloatProperty(
-        name="maxvolume (Maximum Volume)", default=0.75, min=0.5, max=1.0
+    ambf_soft_body_enable_max_volume: BoolProperty(
+        name="Enable Maximum Volume", default=False
+    )
+    ambf_soft_body_max_volume: FloatProperty(
+        name="Maximum Volume", default=0.75, min=-float('inf'), max=float('inf')
     )
 
     # Timescale property
-    Object.ambf_soft_body_timescale = bpy.props.FloatProperty(
-        name="timescale (Timescale Factor)", default=1.0, min=0.5, max=1.5
+    ambf_soft_body_enable_timescale: BoolProperty(
+        name="Enable Timescale", default=False
+    )
+    ambf_soft_body_timescale: FloatProperty(
+        name="Timescale", default=1.0, min=-float('inf'), max=float('inf')
     )
 
     # Iterations properties
-    Object.ambf_soft_body_velocity_iterations = bpy.props.IntProperty(
-        name="viterations (Velocity Iterations)", default=10, min=5, max=20
+    ambf_soft_body_enable_velocity_iterations: BoolProperty(
+        name="Enable Velocity Iterations", default=False
+    )
+    ambf_soft_body_velocity_iterations: IntProperty(
+        name="Velocity Iterations", default=10, min=0, max=1000000
+    )
+    ambf_soft_body_enable_position_iterations: BoolProperty(
+        name="Enable Position Iterations", default=False
+    )
+    ambf_soft_body_position_iterations: IntProperty(
+        name="Position Iterations", default=10, min=0, max=1000000
+    )
+    ambf_soft_body_enable_deformation_iterations: BoolProperty(
+        name="Enable Deformation Iterations", default=False
+    )
+    ambf_soft_body_deformation_iterations: IntProperty(
+        name="Deformation Iterations", default=10, min=0, max=1000000
+    )
+    ambf_soft_body_enable_collision_iterations: BoolProperty(
+        name="Enable Collision Iterations", default=False
+    )
+    ambf_soft_body_collision_iterations: IntProperty(
+        name="Collision Iterations", default=10, min=0, max=1000000
     )
 
-    Object.ambf_soft_body_position_iterations = bpy.props.IntProperty(
-        name="piterations (Position Iterations)", default=10, min=5, max=20
+    # Flags, bending, and cutting properties
+    ambf_soft_body_enable_flags: BoolProperty(
+        name="Enable Flags", default=False
+    )
+    ambf_soft_body_flags: IntProperty(
+        name="Flags", default=0, min=0, max=1000000
+    )
+    ambf_soft_body_enable_bending_constraint: BoolProperty(
+        name="Enable Bending Constraint", default=False
+    )
+    ambf_soft_body_bending_constraint: IntProperty(
+        name="Bending Constraint", default=0, min=0, max=1000000
+    )
+    ambf_soft_body_enable_cutting_enabled: BoolProperty(
+        name="Enable Cutting", default=False
+    )
+    ambf_soft_body_cutting_enabled: BoolProperty(
+        name="Cutting Capability", default=False
+    )
+    ambf_soft_body_enable_clusters: BoolProperty(
+        name="Enable Clusters", default=False
+    )
+    ambf_soft_body_clusters: IntProperty(
+        name="Clusters", default=0, min=0, max=1000000
     )
 
-    Object.ambf_soft_body_deformation_iterations = bpy.props.IntProperty(
-        name="diterations (Deformation Iterations)", default=10, min=5, max=20
+    # Fixed nodes
+    ambf_soft_body_enable_fixed_nodes: BoolProperty(
+        name="Enable Fixed Nodes", default=False
+    )
+    ambf_soft_body_fixed_nodes: CollectionProperty(
+        type=FixedNodeItem,
+        name="Fixed Nodes",
+        description="List of Fixed Node Indices"
+    )
+    ambf_soft_body_randomize_constraints: BoolProperty(
+        name="Randomize Constraints", default=False
     )
 
-    ambf_soft_body_collision_iterations = bpy.props.IntProperty(
-        name="citerations (Collision Iterations)", default=10, min=5, max=20
-    )
 
-    # Flags (additional settings)
-    Object.ambf_soft_body_flags = bpy.props.IntProperty(
-        name="flags (Additional Settings Flags)", default=0
-    )
+class RigidBodyProperties(PropertyGroup):
+    Object.ambf_rigid_body_namespace = StringProperty(name="Namespace", default="")
 
-    # Cutting and clusters properties
-    Object.ambf_soft_body_cutting_enabled = bpy.props.BoolProperty(
-        name="enable_cutting (Cutting Capability)", default=False
-    )
+    Object.ambf_rigid_body_inertia_x = FloatProperty(name='Ix', default=1.0, min=0.0)
 
-    Object.ambf_soft_body_clusters = bpy.props.IntProperty(
-        name="clusters (Number of Clusters)", default=0, min=0, max=10
-    )
+    Object.ambf_rigid_body_inertia_y = FloatProperty(name='Iy', default=1.0, min=0.0)
 
-    # Fixed nodes (list of node indices)
-    Object.ambf_soft_body_fixed_nodes = bpy.props.StringProperty(
-        name="fixed nodes (Fixed Nodes)", default=""
-    )
+    Object.ambf_rigid_body_inertia_z = FloatProperty(name='Iz', default=1.0, min=0.0)
+
+    Object.ambf_rigid_body_static_friction = FloatProperty(name="Static Friction", default=0.5, min=0.0, max=10.0)
+
+    Object.ambf_rigid_body_rolling_friction = FloatProperty(name="Rolling Friction", default=0.0, min=0.0, max=1.0)
+
+    Object.ambf_rigid_body_restitution = FloatProperty(name="Restitution", default=0.1, min=0.0, max=1.0)
+
+    Object.ambf_rigid_body_linear_damping = FloatProperty(name="Linear Damping", default=0.04, min=0.0, max=1.0)
+
+    Object.ambf_rigid_body_angular_damping = FloatProperty(name="Angular Damping", default=0.1, min=0.0, max=1.0)
+
+    Object.ambf_rigid_body_enable_controllers = BoolProperty(name="Enable Controllers", default=False)
+
+    Object.ambf_rigid_body_linear_controller_p_gain = FloatProperty(name="Proportional Gain (P)", default=10, min=0)
+
+    Object.ambf_rigid_body_linear_controller_i_gain = FloatProperty(name="Integral Gain (I)", default=0, min=0)
+
+    Object.ambf_rigid_body_linear_controller_d_gain = FloatProperty(name="Damping Gain (D)", default=1, min=0)
+
+    Object.ambf_rigid_body_angular_controller_p_gain = FloatProperty(name="Proportional Gain (P)", default=10, min=0)
+
+    Object.ambf_rigid_body_angular_controller_i_gain = FloatProperty(name="Integral Gain (I)", default=0, min=0)
+
+    Object.ambf_rigid_body_angular_controller_d_gain = FloatProperty(name="Damping Gain (D)", default=1, min=0)
+
+    Object.ambf_rigid_body_is_static = BoolProperty \
+            (
+            name="Static",
+            default=False,
+            description="Is this object dynamic or static (mass = 0.0 Kg)"
+        )
+
+    Object.ambf_rigid_body_specify_inertia = BoolProperty \
+            (
+            name="Specify Inertia",
+            default=False,
+            description="If not set explicitly, it is calculated automatically by AMBF"
+        )
+
+    Object.ambf_rigid_body_controller_output_type = EnumProperty \
+            (
+            items=
+            [
+                ('VELOCITY', 'VELOCITY', '', '', 0),
+                ('FORCE', 'FORCE', '', '', 1),
+            ],
+            name="Controller Output Type",
+            default='VELOCITY',
+            description='The output of the controller fed to the simulation. Better to use (VELOCITY) with P <= 10, D <= 1'
+        )
+
+    Object.ambf_rigid_body_publish_children_names = BoolProperty \
+            (
+            name="Publish Children Names",
+            default=False
+        )
+
+    Object.ambf_rigid_body_publish_joint_names = BoolProperty \
+            (
+            name="Publish Joint Names",
+            default=False
+        )
+
+    Object.ambf_rigid_body_publish_joint_positions = BoolProperty \
+            (
+            name="Publish Joint Positions",
+            default=False
+        )
 
 # TODO: Fix type expression
 class SensorArrayItem(PropertyGroup):
@@ -6250,6 +6909,8 @@ custom_classes = (
         AMBF_OT_estimate_shape_offsets,
         AMBF_OT_ambf_collision_shape_add,
         AMBF_OT_ambf_collision_shape_remove,
+        AMBF_OT_ambf_move_collision_mesh_to_body_origin,
+        AMBF_OT_ambf_collision_mesh_use_current_location,
         AMBF_OT_estimate_collision_shapes_geometry,
         AMBF_OT_estimate_inertias,
         AMBF_OT_estimate_joint_controller_gains,
@@ -6260,6 +6921,10 @@ custom_classes = (
         AMBF_OT_estimate_inertia_per_object,
         AMBF_OT_estimate_joint_controller_gain_per_object,
         AMBF_OT_auto_rename_joint_per_object,
+
+        OBJECT_OT_ClearFidexNodes,
+        OBJECT_OT_AddFixedNodesFromSelection,
+        OBJECT_OT_RemoveFixedNode,
 
         AMBF_OT_ambf_rigid_body_activate,
         AMBF_OT_ambf_ghost_object_activate,
@@ -6282,9 +6947,6 @@ custom_classes = (
         AMBF_PT_ambf_camera,
         AMBF_PT_ambf_light,
 
-        AMBF_OT_ambf_move_collision_mesh_to_body_origin,
-        AMBF_OT_ambf_collision_mesh_use_current_location,
-
         # Collection Operators
         # TODO: naming with COLLECTION_OT_ prefix, COLLECTION_PT_ prefix
         CollectionSelectorPanel,
@@ -6304,7 +6966,9 @@ custom_classes = (
         SendAngularVelocity,
 
         # AMBF Obj Properties
+        RigidBodyProperties,
         GhostObjectProperties,
+        FixedNodeItem,
         SoftBodyProperties,
         SensorArrayItem,
         SensorProperties
@@ -6315,6 +6979,8 @@ def register():
     from bpy.utils import register_class
     for cls in custom_classes:
         register_class(cls)
+
+    # TODO: organize each property group
     
     ''' COLLECTION PROPERTIES'''
     Scene.selected_collections = bpy.props.StringProperty(
@@ -6390,14 +7056,7 @@ def register():
     default=1.0,  
     min=0.0, 
     max=10.0  
-)   
-    ''' COMMON PROPERTIES'''
-    Object.ambf_body_passive = BoolProperty(name="Is Passive?", default=False,
-                                                  description="If passive. this body will not be spawned as an AMBF communication object")
-    
-    Object.ambf_body_transparency = FloatProperty(name="Transparency", default=1.0, min=0.0, max=1.0)
-
-    Object.ambf_scale = FloatProperty(name="Scale", default=1.0, min=0.0001)
+)  
 
     ''' GHOST OBJECT PROPERTIES'''  
     Object.ambf_ghost_object_properties = PointerProperty(type=GhostObjectProperties)
@@ -6406,56 +7065,18 @@ def register():
     Object.ambf_soft_body_properties = PointerProperty(type=SoftBodyProperties)
     
     ''' RIGID BODY PROPERTIES'''
-    # TODO: make rigid body properties a separate class
-    Object.ambf_rigid_body_namespace = StringProperty(name="Namespace", default="")
-
-    Object.ambf_rigid_body_mass = FloatProperty(name="mass", default=1.0, min=0.0001)
-
-    Object.ambf_rigid_body_inertia_x = FloatProperty(name='Ix', default=1.0, min=0.0)
-
-    Object.ambf_rigid_body_inertia_y = FloatProperty(name='Iy', default=1.0, min=0.0)
-
-    Object.ambf_rigid_body_inertia_z = FloatProperty(name='Iz', default=1.0, min=0.0)
-
-    Object.ambf_rigid_body_static_friction = FloatProperty(name="Static Friction", default=0.5, min=0.0, max=10.0)
-
-    Object.ambf_rigid_body_rolling_friction = FloatProperty(name="Rolling Friction", default=0.0, min=0.0, max=1.0)
-
-    Object.ambf_rigid_body_restitution = FloatProperty(name="Restitution", default=0.1, min=0.0, max=1.0)
-
-    Object.ambf_rigid_body_linear_damping = FloatProperty(name="Linear Damping", default=0.04, min=0.0, max=1.0)
-
-    Object.ambf_rigid_body_angular_damping = FloatProperty(name="Angular Damping", default=0.1, min=0.0, max=1.0)
-
-    Object.ambf_rigid_body_enable_controllers = BoolProperty(name="Enable Controllers", default=False)
-
-    Object.ambf_rigid_body_linear_controller_p_gain = FloatProperty(name="Proportional Gain (P)", default=10, min=0)
-
-    Object.ambf_rigid_body_linear_controller_i_gain = FloatProperty(name="Integral Gain (I)", default=0, min=0)
-
-    Object.ambf_rigid_body_linear_controller_d_gain = FloatProperty(name="Damping Gain (D)", default=1, min=0)
-
-    Object.ambf_rigid_body_angular_controller_p_gain = FloatProperty(name="Proportional Gain (P)", default=10, min=0)
-
-    Object.ambf_rigid_body_angular_controller_i_gain = FloatProperty(name="Integral Gain (I)", default=0, min=0)
-
-    Object.ambf_rigid_body_angular_controller_d_gain = FloatProperty(name="Damping Gain (D)", default=1, min=0)
-
-    Object.ambf_rigid_body_is_static = BoolProperty \
+    Object.ambf_rigid_body_properties = PointerProperty(type=RigidBodyProperties)
+    
+    ''' COMMON OBJECT PROPERTIES'''
+    Object.ambf_body_angular_inertial_offset = FloatVectorProperty \
             (
-            name="Static",
-            default=False,
-            description="Is this object dynamic or static (mass = 0.0 Kg)"
+            name='Angular Inertial Offset',
+            default=(0.0, 0.0, 0.0),
+            options={'PROPORTIONAL'},
+            subtype='EULER',
         )
-
-    Object.ambf_rigid_body_specify_inertia = BoolProperty \
-            (
-            name="Specify Inertia",
-            default=False,
-            description="If not set explicitly, it is calculated automatically by AMBF"
-        )
-
-    Object.ambf_rigid_body_linear_inertial_offset = FloatVectorProperty \
+    
+    Object.ambf_body_linear_inertial_offset = FloatVectorProperty \
             (
             name='Linear Inertial Offset',
             default=(0.0, 0.0, 0.0),
@@ -6463,46 +7084,39 @@ def register():
             update=collision_shape_offset_update_cb,
             subtype='XYZ',
         )
-
-    Object.ambf_rigid_body_angular_inertial_offset = FloatVectorProperty \
-            (
-            name='Angular Inertial Offset',
-            default=(0.0, 0.0, 0.0),
-            options={'PROPORTIONAL'},
-            subtype='EULER',
-        )
-
-    Object.ambf_rigid_body_controller_output_type = EnumProperty \
-            (
-            items=
-            [
-                ('VELOCITY', 'VELOCITY', '', '', 0),
-                ('FORCE', 'FORCE', '', '', 1),
-            ],
-            name="Controller Output Type",
-            default='VELOCITY',
-            description='The output of the controller fed to the simulation. Better to use (VELOCITY) with P <= 10, D <= 1'
-        )
-
-    Object.ambf_rigid_body_publish_children_names = BoolProperty \
-            (
-            name="Publish Children Names",
-            default=False
-        )
-
-    Object.ambf_rigid_body_publish_joint_names = BoolProperty \
-            (
-            name="Publish Joint Names",
-            default=False
-        )
-
-    Object.ambf_rigid_body_publish_joint_positions = BoolProperty \
-            (
-            name="Publish Joint Positions",
-            default=False
-        )
     
-    ''' OBJECT PROPERTIES'''
+    Object.ambf_body_mass = FloatProperty(name="mass", default=1.0, min=0.0001)
+
+    Object.ambf_body_passive = BoolProperty(name="Is Passive?", default=False,
+                                                  description="If passive. this body will not be spawned as an AMBF communication object")
+    
+    Object.ambf_body_transparency = FloatProperty(name="Transparency", default=1.0, min=0.0, max=1.0)
+
+    Object.ambf_scale = FloatProperty(name="Scale", default=1.0, min=0.0001)
+    
+    # Ambient color component
+    Object.ambf_object_ambient_level = FloatProperty(name="Ambient Level", min=0, max=1, default=1.0) # Level = 1.0
+
+    # Diffuse color component
+    Object.ambf_object_diffuse_color  = FloatVectorProperty(
+        name="Diffuse Color",
+        subtype="COLOR",
+        size=3,
+        min=0,
+        max=1,
+        default=(0.5, 0.5, 0.5) # r=0.5, g=0.5, b=0.5
+    )
+
+    # Specular color component
+    Object.ambf_object_specular_color = FloatVectorProperty(
+        name="Specular Color",
+        subtype="COLOR",
+        size=3,
+        min=0,
+        max=1,
+        default=(0.5, 0.05, 0.05)  # r=0.5, g=0.05, b=0.05
+    )
+
     Object.ambf_object_override_gravity = BoolProperty \
             (
             name="Override Object Gravity",
@@ -6895,11 +7509,7 @@ def unregister():
     del bpy.types.Object.ambf_light_spot_exponent
     del bpy.types.Object.ambf_light_shadow_quality
     del bpy.types.Object.ambf_light_cutoff_angle
-    del bpy.types.Object.ambf_light_constant_attenuation
-
-    ''' COMMON PROPERTIES '''
-    del bpy.types.Object.ambf_body_passive
-    del bpy.types.Object.ambf_body_transparency
+    del bpy.types.Object.ambf_light_constant_attenuation    
 
     ''' GHOST OBJECT PROPERTIES '''
     del bpy.types.Object.ambf_ghost_object_properties
@@ -6908,33 +7518,13 @@ def unregister():
     del bpy.types.Object.ambf_soft_body_properties
 
     ''' RIGID BODY PROPERTIES '''
-    del bpy.types.Object.ambf_rigid_body_namespace
-    del bpy.types.Object.ambf_rigid_body_mass
-    del bpy.types.Object.ambf_rigid_body_inertia_x
-    del bpy.types.Object.ambf_rigid_body_inertia_y
-    del bpy.types.Object.ambf_rigid_body_inertia_z
-    del bpy.types.Object.ambf_rigid_body_static_friction
-    del bpy.types.Object.ambf_rigid_body_rolling_friction
-    del bpy.types.Object.ambf_rigid_body_restitution
-    del bpy.types.Object.ambf_rigid_body_linear_damping
-    del bpy.types.Object.ambf_rigid_body_angular_damping
-    del bpy.types.Object.ambf_rigid_body_enable_controllers
-    del bpy.types.Object.ambf_rigid_body_linear_controller_p_gain
-    del bpy.types.Object.ambf_rigid_body_linear_controller_i_gain
-    del bpy.types.Object.ambf_rigid_body_linear_controller_d_gain
-    del bpy.types.Object.ambf_rigid_body_angular_controller_p_gain
-    del bpy.types.Object.ambf_rigid_body_angular_controller_i_gain
-    del bpy.types.Object.ambf_rigid_body_angular_controller_d_gain
-    del bpy.types.Object.ambf_rigid_body_is_static
-    del bpy.types.Object.ambf_rigid_body_specify_inertia
-    del bpy.types.Object.ambf_rigid_body_linear_inertial_offset
-    del bpy.types.Object.ambf_rigid_body_angular_inertial_offset
-    del bpy.types.Object.ambf_rigid_body_controller_output_type
-    del bpy.types.Object.ambf_rigid_body_publish_children_names
-    del bpy.types.Object.ambf_rigid_body_publish_joint_names
-    del bpy.types.Object.ambf_rigid_body_publish_joint_positions
+    del bpy.types.Object.ambf_rigid_body_properties
 
-    ''' OBJECT PROPERTIES '''
+    ''' COMMON OBJECT PROPERTIES '''
+    del bpy.types.Object.ambf_body_mass
+    del bpy.types.Object.ambf_body_passive
+    del bpy.types.Object.ambf_scale
+    del bpy.types.Object.ambf_body_transparency
     del bpy.types.Object.ambf_object_override_gravity
     del bpy.types.Object.ambf_object_gravity
     del bpy.types.Object.ambf_object_visible
@@ -7018,3 +7608,9 @@ if __name__ == "__main__":
     print("\n\n########## STARTING ##########")
     register()
     #unregister()
+
+
+""" ********** TODO ********** 
+- Make each property group only responsible for the object type;
+Fix object property problem that (Object.blablabla) will be shared between all objects
+"""
