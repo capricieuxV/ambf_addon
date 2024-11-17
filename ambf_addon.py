@@ -1971,9 +1971,13 @@ class AMBF_OT_generate_ambf_file(Operator):
         actuator_data['location']['orientation']['y'] = ambf_round(world_rot[2])
 
         # Set additional properties
-        parent_obj_handle = actuator_obj_handle.ambf_object_parent
-        parent_obj_handle_name = remove_namespace_prefix(parent_obj_handle.name)
-        actuator_data['parent'] = self.add_body_prefix_str(parent_obj_handle_name)
+        if actuator_obj_handle.ambf_object_parent is None:
+            actuator_data['parent'] = ''
+        else:
+            parent_obj_handle = actuator_obj_handle.ambf_object_parent
+            parent_obj_handle_name = remove_namespace_prefix(parent_obj_handle.name)
+            actuator_data['parent'] = self.add_body_prefix_str(parent_obj_handle_name)
+            
         actuator_data['visible'] = actuator_obj_handle.ambf_object_visible
         actuator_data['visible size'] = actuator_obj_handle.ambf_object_visible_size
 
@@ -1992,9 +1996,10 @@ class AMBF_OT_generate_ambf_file(Operator):
         print("Generating Sensor: ", sensor_obj_handle.name)
 
         # Create a SensorTemplate instance with the sensor type and frequency
-        sensor_type = sensor_obj_handle.ambf_sensor_type
+        sensor_obj = sensor_obj_handle.ambf_sensor_properties
+        sensor_type = sensor_obj.ambf_sensor_type
         # TODO: Deal with sensor frequency in the future
-        # freq = sensor_obj_handle.ambf_sensor_frequency 
+        # freq = sensor_obj.ambf_sensor_frequency 
         freq = None
         sensor_template = SensorTemplate(sensor_type, freq)
 
@@ -2035,29 +2040,29 @@ class AMBF_OT_generate_ambf_file(Operator):
 
         # Add specific attributes based on the sensor type
         if sensor_type == 'Proximity':
-            sensor_data['range'] = sensor_obj_handle.ambf_sensor_range
+            sensor_data['range'] = sensor_obj.ambf_sensor_range
             sensor_data['array'] = [
                 {
                     'offset': {'x': ambf_round(item.offset[0]), 'y': ambf_round(item.offset[1]), 'z': ambf_round(item.offset[2])},
                     'direction': {'x': ambf_round(item.direction[0]), 'y': ambf_round(item.direction[1]), 'z': ambf_round(item.direction[2])}
                 }
-                for item in sensor_obj_handle.ambf_sensor_properties.ambf_sensor_array
+                for item in sensor_obj.ambf_sensor_array
             ]
 
         elif sensor_type == 'Resistance':
             sensor_data['friction'] = {
-                'static': sensor_obj_handle.ambf_sensor_friction_static,
-                'damping': sensor_obj_handle.ambf_sensor_friction_damping,
-                'dynamic': sensor_obj_handle.ambf_sensor_friction_dynamic,
-                'variable': sensor_obj_handle.ambf_sensor_friction_variable
+                'static': sensor_obj.ambf_sensor_friction_static,
+                'damping': sensor_obj.ambf_sensor_friction_damping,
+                'dynamic': sensor_obj.ambf_sensor_friction_dynamic,
+                'variable': sensor_obj.ambf_sensor_friction_variable
             }
-            sensor_data['contact area'] = sensor_obj_handle.ambf_sensor_contact_area
-            sensor_data['contact stiffness'] = sensor_obj_handle.ambf_sensor_contact_stiffness
-            sensor_data['contact damping'] = sensor_obj_handle.ambf_sensor_contact_damping
+            sensor_data['contact area'] = sensor_obj.ambf_sensor_contact_area
+            sensor_data['contact stiffness'] = sensor_obj.ambf_sensor_contact_stiffness
+            sensor_data['contact damping'] = sensor_obj.ambf_sensor_contact_damping
 
         elif sensor_type == 'Contact':
-            sensor_data['distance threshold'] = sensor_obj_handle.ambf_sensor_distance_threshold
-            sensor_data['process contact details'] = sensor_obj_handle.ambf_sensor_process_contact_details
+            sensor_data['distance threshold'] = sensor_obj.ambf_sensor_distance_threshold
+            sensor_data['process contact details'] = sensor_obj.ambf_sensor_process_contact_details
 
         # Add the sensor to the list and dictionary for the ADF structure
         self._sensor_names_list.append(sensor_yaml_name)
@@ -2659,10 +2664,11 @@ class AMBF_OT_add_sensor_array_item(Operator):
         obj = context.object
 
         # Check if the object has the 'ambf_sensor_array' collection property
-        if not hasattr(obj, 'ambf_sensor_array'):
+        if not hasattr(obj.ambf_sensor_properties, 'ambf_sensor_array'):
             self.report({'ERROR'}, "The object doesn't have an ambf_sensor_array property.")
             return {'CANCELLED'}
 
+        print("Adding Sensor Array Item")
         new_item = obj.ambf_sensor_properties.ambf_sensor_array.add()
         new_item.offset = (0.0, 0.0, 0.0)
         new_item.direction = (0.0, -1.0, 0.0)
@@ -6376,6 +6382,7 @@ class AMBF_PT_ambf_sensor(Panel):
     def draw(self, context):
         layout = self.layout
         obj = context.object
+        sensor = obj.ambf_sensor_properties
 
         # Sensor Activation Button
         row = layout.row()
@@ -6395,7 +6402,7 @@ class AMBF_PT_ambf_sensor(Panel):
 
             # Sensor Type Dropdown
             row = layout.row()
-            row.prop(obj, 'ambf_sensor_type', text="Sensor Type")
+            row.prop(sensor, 'ambf_sensor_type', text="Sensor Type")
 
             # Visible Boolean Property
             row = layout.row()
@@ -6407,19 +6414,19 @@ class AMBF_PT_ambf_sensor(Panel):
             row.prop(obj, 'ambf_object_visible_size', text="Visible Size")
             
             # Conditional properties based on sensor type
-            sensor_type = obj.ambf_sensor_type
+            sensor_type = sensor.ambf_sensor_type
 
-            if obj.ambf_sensor_type == 'Proximity':
+            if sensor.ambf_sensor_type == 'Proximity':
                 # Range Property
                 row = layout.row()
-                row.prop(obj, 'ambf_sensor_range', text="Range")
+                row.prop(sensor, 'ambf_sensor_range', text="Range")
 
                 # Sensor Array Items
                 col = layout.column()
                 col.label(text="Sensor Array Items:")
                 col.operator('ambf.add_sensor_array_item', text="Add Array Item")
 
-                for i, item in enumerate(obj.ambf_sensor_properties.ambf_sensor_array):
+                for i, item in enumerate(sensor.ambf_sensor_array):
                     box = col.box()
                     row = box.row()
                     row.label(text=f"Item {i+1}")
@@ -6437,27 +6444,27 @@ class AMBF_PT_ambf_sensor(Panel):
                 row = layout.row()
                 row.label(text="Friction Properties")
                 col = layout.column(align=True)
-                col.prop(obj, 'ambf_sensor_friction_static', text="Static Friction")
-                col.prop(obj, 'ambf_sensor_friction_damping', text="Damping Friction")
-                col.prop(obj, 'ambf_sensor_friction_dynamic', text="Dynamic Friction")
-                col.prop(obj, 'ambf_sensor_friction_variable', text="Variable Friction")
+                col.prop(sensor, 'ambf_sensor_friction_static', text="Static Friction")
+                col.prop(sensor, 'ambf_sensor_friction_damping', text="Damping Friction")
+                col.prop(sensor, 'ambf_sensor_friction_dynamic', text="Dynamic Friction")
+                col.prop(sensor, 'ambf_sensor_friction_variable', text="Variable Friction")
 
                 # Contact Area, Stiffness, Damping
                 row = layout.row()
-                row.prop(obj, 'ambf_sensor_contact_area', text="Contact Area")
+                row.prop(sensor, 'ambf_sensor_contact_area', text="Contact Area")
                 row = layout.row()
-                row.prop(obj, 'ambf_sensor_contact_stiffness', text="Contact Stiffness")
+                row.prop(sensor, 'ambf_sensor_contact_stiffness', text="Contact Stiffness")
                 row = layout.row()
-                row.prop(obj, 'ambf_sensor_contact_damping', text="Contact Damping")
+                row.prop(sensor, 'ambf_sensor_contact_damping', text="Contact Damping")
 
             elif sensor_type == 'Contact':
                 # Distance Threshold
                 row = layout.row()
-                row.prop(obj, 'ambf_sensor_distance_threshold', text="Distance Threshold")
+                row.prop(sensor, 'ambf_sensor_distance_threshold', text="Distance Threshold")
 
                 # Process Contact Details
                 row = layout.row()
-                row.prop(obj, 'ambf_sensor_process_contact_details', text="Process Contact Details")
+                row.prop(sensor, 'ambf_sensor_process_contact_details', text="Process Contact Details")
             
             # TODO: Implement this in the future
             # # Enable Frequency Checkbox
