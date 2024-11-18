@@ -1,145 +1,151 @@
 import bpy
-from bpy.props import (
-    FloatVectorProperty,
-    CollectionProperty,
-    BoolProperty,
-    FloatProperty,
-    EnumProperty,
-)
-from bpy.types import PropertyGroup, Panel
+from bpy.props import StringProperty, BoolProperty, EnumProperty, FloatVectorProperty, CollectionProperty, PointerProperty
+from bpy.types import PropertyGroup, Operator, Panel
 
-# Define the SensorArrayItem class with explicit bl_idname
-class SensorArrayItem(PropertyGroup):
-    bl_idname = "OBJECT_PT_sensor_array_item"
-    bl_label = "Sensor Array Item"
-    
-    offset: FloatVectorProperty(
-        name="Offset",
-        size=3,
-        subtype='XYZ',
-        default=(0.0, 0.0, 0.0)
-    )
-    direction: FloatVectorProperty(
-        name="Direction",
-        size=3,
-        subtype='XYZ',
-        default=(0.0, -1.0, 0.0)
-    )
+class CollectionProperties(PropertyGroup):
+    name: StringProperty(name="Collection Name", default="")
+    collection_ref: PointerProperty(name="Collection Reference", type=bpy.types.Collection)
 
-# Define SensorProperties with ambf_sensor_array using SensorArrayItem
-class SensorProperties(PropertyGroup):
-    bl_idname = "OBJECT_PT_sensor_properties"
-    bl_label = "Sensor Properties"
-
-    ambf_sensor_type: EnumProperty(
+def register_custom_properties():
+    bpy.types.Collection.mesh_path = StringProperty(name="Meshes (Save To)", default="", description="Define the path to save mesh files", subtype='DIR_PATH')
+    bpy.types.Collection.adf_path = StringProperty(name="Config (Save To)", default="", description="Define the root path of the project", subtype='FILE_PATH')
+    bpy.types.Collection.namespace = StringProperty(name="AMBF Namespace", default="/ambf/env/", description="The namespace for all bodies in this scene")
+    bpy.types.Collection.meshes_save_type = EnumProperty(
         items=[
-            ('Proximity', 'Proximity', '', '', 0),
-            ('Resistance', 'Resistance', '', '', 1),
-            ('Contact', 'Contact', '', '', 2),
+            ('STL', 'STL', 'STL'),
+            ('OBJ', 'OBJ', 'OBJ'),
+            ('3DS', '3DS', '3DS'),
+            ('PLY', 'PLY', 'PLY')
         ],
-        name="Type",
-        default='Proximity'
+        name="Mesh Type",
+        default='STL'
     )
-    
-    ambf_sensor_enable_frequency: BoolProperty(
-        name="Enable Frequency",
-        default=False
-    )
+    bpy.types.Collection.save_high_res = BoolProperty(name="Save High Res", default=False)
+    bpy.types.Collection.save_low_res = BoolProperty(name="Save Low Res", default=False)
+    bpy.types.Collection.save_textures = BoolProperty(name="Save Textures", default=False)
+    bpy.types.Collection.save_selection_only = BoolProperty(name="Save Selection Only", default=False)
+    bpy.types.Collection.model_override_gravity = BoolProperty(name="Override Gravity", default=False)
+    bpy.types.Collection.model_gravity = FloatVectorProperty(
+        name='Model Gravity',
+        default=(0.0, 0.0, -9.8),
+        options={'PROPORTIONAL'},
+        subtype='XYZ',
+    )    
+    bpy.types.Collection.ignore_inter_collision = BoolProperty(name="Ignore Inter Collision", default=False)
+    bpy.types.Collection.precision = StringProperty(name="Precision", default="")
 
-    ambf_sensor_frequency: FloatProperty(
-        name="Frequency", 
-        default=1.0, 
-        min=0.0
-    )
-    
-    ambf_object_visible: BoolProperty(
-        name="Visible",
-        default=False
-    )
-    
-    ambf_object_visible_size: FloatProperty(
-        name="Visible Size",
-        default=1.0,
-        min=0.0
-    )
+def update_collection_enum_items(self, context):
+    items = [(coll.name, coll.name, "") for coll in bpy.data.collections if coll.name not in [c.name for c in context.scene.ambf_collection_properties]]
+    return items
 
-    # Proximity Sensor Properties
-    ambf_sensor_range: FloatProperty(
-        name="Range",
-        default=0.1,
-        min=0.0
-    )
-    
-    # Sensor Array Collection for Proximity Sensor
-    ambf_sensor_array: CollectionProperty(
-        type=SensorArrayItem,
-        name="Array"
-    )
+bpy.types.Scene.collection_enum = bpy.props.EnumProperty(items=update_collection_enum_items, name="Collections")
 
-    # Resistance Sensor Properties
-    ambf_sensor_friction_static: FloatProperty(
-        name="Static Friction",
-        default=0.0,
-        min=0.0
-    )
+class AddCollectionOperator(Operator):
+    bl_idname = "ambf.add_collection"
+    bl_label = "Add Collection"
 
-    ambf_sensor_friction_damping: FloatProperty(
-        name="Damping Friction",
-        default=0.0,
-        min=0.0
-    )
+    def execute(self, context):
+        selected_collection_name = context.scene.collection_enum
+        if selected_collection_name:
+            selected_collection = bpy.data.collections[selected_collection_name]
+            
+            collection_prop = context.scene.ambf_collection_properties.add()
+            collection_prop.name = selected_collection.name
+            collection_prop.collection_ref = selected_collection
+            return {'FINISHED'}
+        else:
+            self.report({'WARNING'}, "No collection selected")
+            return {'CANCELLED'}
 
-    ambf_sensor_friction_dynamic: FloatProperty(
-        name="Dynamic Friction",
-        default=0.0,
-        min=0.0
-    )
+class RemoveCollectionOperator(Operator):
+    bl_idname = "ambf.remove_collection"
+    bl_label = "Remove Collection"
+    index: bpy.props.IntProperty()
 
-    ambf_sensor_friction_variable: BoolProperty(
-        name="Variable Friction",
-        default=False
-    )
+    def execute(self, context):
+        context.scene.ambf_collection_properties.remove(self.index)
+        return {'FINISHED'}
 
-    ambf_sensor_contact_area: FloatProperty(
-        name="Contact Area",
-        default=0.0,
-        min=0.0
-    )
+class AMBF_PT_main_panel(Panel):
+    bl_label = "IMPORT, MAKE AND EXPORT ADFs"
+    bl_idname = "AMBF_PT_main_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "AMBF"
 
-    ambf_sensor_contact_stiffness: FloatProperty(
-        name="Contact Stiffness",
-        default=0.0,
-        min=0.0
-    )
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
 
-    ambf_sensor_contact_damping: FloatProperty(
-        name="Contact Damping",
-        default=0.0,
-        min=0.0
-    )
+        # Dropdown to select a collection
+        layout.prop(scene, "collection_enum", text="Select Collection")
+        layout.operator("ambf.add_collection", text="Add Collection")
 
-    # Contact Sensor Properties
-    ambf_sensor_distance_threshold: FloatProperty(
-        name="Distance Threshold",
-        default=0.0,
-        min=0.0
-    )
+        for index, collection in enumerate(scene.ambf_collection_properties):
+            box = layout.box()
+            row = box.row()
+            row.prop(collection, "name", text="")
+            row.operator("ambf.remove_collection", text="", icon='X').index = index
 
-    ambf_sensor_process_contact_details: BoolProperty(
-        name="Process Contact Details",
-        default=False
-    )
+            # Section for saving meshes and textures
+            sbox = box.box()
+            row = sbox.row()
+            row.label(text="C. SAVE MESHES + TEXTURES")
+            col = sbox.column()
+            col.prop(collection.collection_ref, 'mesh_path')
+            col.prop(collection.collection_ref, 'meshes_save_type')
+            row = sbox.row()
+            row.prop(collection.collection_ref, 'save_high_res')
+            row.prop(collection.collection_ref, 'save_low_res')
+            row.prop(collection.collection_ref, 'save_textures')
+            col = sbox.column()
+            col.prop(collection.collection_ref, 'save_selection_only')
+            col.operator("ambf.save_meshes")
 
+            # Section for saving ADF
+            sbox = box.box()
+            row = sbox.row()
+            row.label(text="D. SAVE ADF")
+            col = sbox.column()
+            col.prop(collection.collection_ref, "model_override_gravity")
+            col.prop(collection.collection_ref, "model_gravity")
+            col.prop(collection.collection_ref, "ignore_inter_collision")
+            col.prop(collection.collection_ref, "precision")
+            col.prop(collection.collection_ref, 'namespace', text='Global NS')
+            col.prop(collection.collection_ref, 'adf_path', text='Save As')
+            col.operator("ambf.add_generate_ambf_file")
 
 def register():
-    bpy.utils.register_class(SensorArrayItem)
-    bpy.utils.register_class(SensorProperties)
-    bpy.types.Object.ambf_sensor_properties = bpy.props.PointerProperty(type=SensorProperties)
+    bpy.utils.register_class(CollectionProperties)
+    bpy.utils.register_class(AddCollectionOperator)
+    bpy.utils.register_class(RemoveCollectionOperator)
+    bpy.utils.register_class(AMBF_PT_main_panel)
+    bpy.types.Scene.ambf_collection_properties = CollectionProperty(type=CollectionProperties)
+    bpy.types.Scene.collection_enum = bpy.props.EnumProperty(items=update_collection_enum_items, name="Collections")
+    register_custom_properties()
 
 def unregister():
-    bpy.utils.unregister_class(SensorProperties)
-    bpy.utils.unregister_class(SensorArrayItem)
-    del bpy.types.Object.ambf_sensor_properties
+    bpy.utils.unregister_class(CollectionProperties)
+    bpy.utils.unregister_class(AddCollectionOperator)
+    bpy.utils.unregister_class(RemoveCollectionOperator)
+    bpy.utils.unregister_class(AMBF_PT_main_panel)
+    del bpy.types.Scene.ambf_collection_properties
+    del bpy.types.Scene.collection_enum
+    unregister_custom_properties()
+
+def unregister_custom_properties():
+    del bpy.types.Collection.mesh_path
+    del bpy.types.Collection.adf_path
+    del bpy.types.Collection.namespace
+    del bpy.types.Collection.meshes_save_type
+    del bpy.types.Collection.save_high_res
+    del bpy.types.Collection.save_low_res
+    del bpy.types.Collection.save_textures
+    del bpy.types.Collection.save_selection_only
+    del bpy.types.Collection.model_override_gravity
+    del bpy.types.Collection.model_gravity
+    del bpy.types.Collection.ignore_inter_collision
+    del bpy.types.Collection.precision
 
 if __name__ == "__main__":
     register()

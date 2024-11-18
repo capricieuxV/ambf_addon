@@ -4,3 +4,7 @@
 
 \.idea/
 .DS_Store
+*.yaml
+*.STL
+*.STL
+*.blend

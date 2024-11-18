@@ -1554,7 +1554,7 @@ class AMBF_OT_generate_ambf_file(Operator):
                 node.node_index for node in body_obj_handle.ambf_soft_body_properties.ambf_soft_body_fixed_nodes
             ]
         
-        soft_data['randomize constraints'] = body_obj_handle.ambf_soft_body_randomize_constraints
+        soft_data['randomize constraints'] = body_obj_handle.ambf_soft_body_properties.ambf_soft_body_randomize_constraints
         
         adf_data[soft_yaml_name] = soft_data
         self._soft_body_names_list.append(soft_yaml_name)
@@ -3678,7 +3678,7 @@ class AMBF_OT_load_ambf_file(Operator):
                 node_item.node_index = node_index
 
         # Randomize constraints
-        obj_handle.ambf_soft_body_randomize_constraints = config.get('randomize constraints', False)
+        obj_handle.ambf_soft_body_properties.ambf_soft_body_randomize_constraints = config.get('randomize constraints', False)
 
     def load_object_name(self, adf_data, obj_handle):
 
@@ -5866,8 +5866,8 @@ class AMBF_PT_ambf_soft_body(bpy.types.Panel):
                     self._draw_toggle_and_value(box, obj.ambf_soft_body_properties, toggle_attr, value_attr, label)
 
             row = box.row()
-            row.prop(obj, 'ambf_soft_body_enable_fixed_nodes', text="Enable Fixed Nodes")
-            if obj.ambf_soft_body_enable_fixed_nodes:
+            row.prop(obj.ambf_soft_body_properties, 'ambf_soft_body_enable_fixed_nodes', text="Enable Fixed Nodes")
+            if obj.ambf_soft_body_properties.ambf_soft_body_enable_fixed_nodes:
                 # Instructions for the user
                 row = layout.row()
                 row.label(text="Select vertices in Edit Mode and click:")
@@ -5894,7 +5894,7 @@ class AMBF_PT_ambf_soft_body(bpy.types.Panel):
             box = layout.box()
             box.label(text="Randomize Constraints")
             row = box.row()
-            row.prop(obj, 'ambf_soft_body_randomize_constraints', text="Randomize Constraints")
+            row.prop(obj.ambf_soft_body_properties, 'ambf_soft_body_randomize_constraints', text="Randomize Constraints")
             
     def _draw_toggle_and_value(self, box, soft_body, toggle_prop, value_prop, label):
         """Helper function to draw a toggle and its corresponding value."""
@@ -6800,6 +6800,7 @@ class SoftBodyProperties(PropertyGroup):
         name="Fixed Nodes",
         description="List of Fixed Node Indices"
     )
+    
     ambf_soft_body_randomize_constraints: BoolProperty(
         name="Randomize Constraints", default=False
     )
